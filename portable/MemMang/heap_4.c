@@ -356,7 +356,7 @@ static void prvHeapInit( void ) /* PRIVILEGED_FUNCTION */
         xTotalHeapSize -= uxAddress - ( size_t ) ucHeap;
     }
 
-    pucAlignedHeap = ( uint8_t * ) uxAddress;
+    pucAlignedHeap = ( uint8_t * ) ucHeap + ( uxAddress - ( size_t ) ucHeap );
 
     /* xStart is used to hold a pointer to the first item in the list of free
      * blocks.  The void cast is used to prevent compiler warnings. */
@@ -368,7 +368,7 @@ static void prvHeapInit( void ) /* PRIVILEGED_FUNCTION */
     uxAddress = ( ( size_t ) pucAlignedHeap ) + xTotalHeapSize;
     uxAddress -= xHeapStructSize;
     uxAddress &= ~( ( size_t ) portBYTE_ALIGNMENT_MASK );
-    pxEnd = ( void * ) uxAddress;
+    pxEnd = ( void * )( ( uint8_t * ) ucHeap + ( uxAddress - ( size_t ) ucHeap ) );
     pxEnd->xBlockSize = 0;
     pxEnd->pxNextFreeBlock = NULL;
 
