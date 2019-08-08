@@ -117,6 +117,7 @@ void * pvPortMalloc( size_t xWantedSize )
 {
     BlockLink_t * pxBlock, * pxPreviousBlock, * pxNewBlockLink;
     void * pvReturn = NULL;
+    size_t xCallerWantedSize = xWantedSize;
 
     vTaskSuspendAll();
     {
@@ -269,7 +270,7 @@ void * pvPortMalloc( size_t xWantedSize )
     #endif /* if ( configUSE_MALLOC_FAILED_HOOK == 1 ) */
 
     configASSERT( ( ( ( size_t ) pvReturn ) & ( size_t ) portBYTE_ALIGNMENT_MASK ) == 0 );
-    pvReturn = cheri_csetbounds(pvReturn, xWantedSize);
+    pvReturn = cheri_csetbounds(pvReturn, xCallerWantedSize);
     return pvReturn;
 }
 /*-----------------------------------------------------------*/
