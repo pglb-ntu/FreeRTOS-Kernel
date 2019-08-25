@@ -79,6 +79,9 @@ interrupt stack after the scheduler has started. */
 	void * xISRStackTop; /* This is initialized in boot.S. */
 #endif
 
+void *pvAlmightyDataCap;
+void *pvAlmightyCodeCap;
+
 /*
  * Setup the timer to generate the tick interrupts.  The implementation in this
  * file is weak to allow application writers to change the timer used to
@@ -121,11 +124,11 @@ task stack, not the ISR stack). */
 	void vPortSetupTimerInterrupt( void )
 	{
 	uint32_t ulCurrentTimeHigh, ulCurrentTimeLow;
-	volatile uint32_t * pulTimeHigh = cheri_setoffset(cheri_getdefault(), configCLINT_BASE_ADDRESS+0xBFFC);
+	volatile uint32_t * pulTimeHigh = cheri_setoffset(pvAlmightyDataCap, configCLINT_BASE_ADDRESS+0xBFFC);
         pulTimeHigh = cheri_csetbounds((void*)pulTimeHigh, sizeof(uint32_t));
-	volatile uint32_t * pulTimeLow = cheri_setoffset(cheri_getdefault(), configCLINT_BASE_ADDRESS+0xBFF8);
+	volatile uint32_t * pulTimeLow = cheri_setoffset(pvAlmightyDataCap, configCLINT_BASE_ADDRESS+0xBFF8);
         pulTimeLow = cheri_csetbounds((void*)pulTimeLow, sizeof(uint32_t));
-	pullMachineTimerCompareRegister = cheri_setoffset(cheri_getdefault(), configCLINT_BASE_ADDRESS+0x4000);
+	pullMachineTimerCompareRegister = cheri_setoffset(pvAlmightyDataCap, configCLINT_BASE_ADDRESS+0x4000);
         pullMachineTimerCompareRegister = cheri_csetbounds((void*)pullMachineTimerCompareRegister, sizeof(uint64_t));
 
 		do
