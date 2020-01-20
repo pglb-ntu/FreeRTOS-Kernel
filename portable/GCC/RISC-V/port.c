@@ -76,8 +76,7 @@ interrupt stack after the scheduler has started. */
 	the ISR stack. */
 	#define portISR_STACK_FILL_BYTE	0xee
 #else
-	extern const StackType_t __freertos_irq_stack_top[];
-        const StackType_t *xISRStackTop = __freertos_irq_stack_top;
+	const StackType_t *xISRStackTop;
 #endif
 
 void *pvAlmightyDataCap;
