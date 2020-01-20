@@ -80,9 +80,7 @@ not need to be guarded with a critical section. */
 /* Architecture specifics. */
 #define portSTACK_GROWTH			( -1 )
 #define portTICK_PERIOD_MS			( ( TickType_t ) 1000 / configTICK_RATE_HZ )
-#if __riscv_xlen == 64
-	#define portBYTE_ALIGNMENT			16
-#else
+#ifdef __riscv
 	#define portBYTE_ALIGNMENT			16
 #endif
 /*-----------------------------------------------------------*/
