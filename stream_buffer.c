@@ -130,6 +130,11 @@
 /* The number of bytes used to hold the length of a message in the buffer. */
 #define sbBYTES_TO_STORE_MESSAGE_LENGTH    ( sizeof( configMESSAGE_BUFFER_LENGTH_TYPE ) )
 
+/* The required alignment of message payloads (if also at least that in size) in the buffer. */
+#ifdef __CHERI_PURE_CAPABILITY__
+    #define sbMESSAGE_ALIGN ( ( size_t ) sizeof( void * ) )
+#endif
+
 /* Bits stored in the ucFlags field of the stream buffer. */
 #define sbFLAGS_IS_MESSAGE_BUFFER          ( ( uint8_t ) 1 ) /* Set if the stream buffer was created as a message buffer, in which case it holds discrete messages rather than a stream. */
 #define sbFLAGS_IS_STATICALLY_ALLOCATED    ( ( uint8_t ) 2 ) /* Set if the stream buffer was created using statically allocated memory. */
@@ -191,6 +196,7 @@ static size_t prvReadMessageFromBuffer( StreamBuffer_t * pxStreamBuffer,
 static size_t prvWriteMessageToBuffer( StreamBuffer_t * const pxStreamBuffer,
                                        const void * pvTxData,
                                        size_t xDataLengthBytes,
+                                       size_t xPadding,
                                        size_t xSpace,
                                        size_t xRequiredSpace ) PRIVILEGED_FUNCTION;
 
@@ -524,6 +530,7 @@ size_t xStreamBufferSend( StreamBufferHandle_t xStreamBuffer,
     StreamBuffer_t * const pxStreamBuffer = xStreamBuffer;
     size_t xReturn, xSpace = 0;
     size_t xRequiredSpace = xDataLengthBytes;
+    size_t xNewHead, xAlignedHead, xPadding = 0;
     TimeOut_t xTimeOut;
 
     /* The maximum amount of space a stream buffer will ever report is its length
@@ -539,7 +546,16 @@ size_t xStreamBufferSend( StreamBufferHandle_t xStreamBuffer,
      * message. */
     if( ( pxStreamBuffer->ucFlags & sbFLAGS_IS_MESSAGE_BUFFER ) != ( uint8_t ) 0 )
     {
-        xRequiredSpace += sbBYTES_TO_STORE_MESSAGE_LENGTH;
+#ifdef sbMESSAGE_ALIGN
+        if( xDataLengthBytes >= sbMESSAGE_ALIGN )
+        {
+            xNewHead = pxStreamBuffer->xHead + sbBYTES_TO_STORE_MESSAGE_LENGTH;
+            xAlignedHead = __builtin_align_up( xNewHead, sbMESSAGE_ALIGN );
+            xPadding = xAlignedHead - xNewHead;
+        }
+#endif
+
+        xRequiredSpace += sbBYTES_TO_STORE_MESSAGE_LENGTH + xPadding;
 
         /* Overflow? */
         configASSERT( xRequiredSpace > xDataLengthBytes );
@@ -620,7 +636,7 @@ size_t xStreamBufferSend( StreamBufferHandle_t xStreamBuffer,
         mtCOVERAGE_TEST_MARKER();
     }
 
-    xReturn = prvWriteMessageToBuffer( pxStreamBuffer, pvTxData, xDataLengthBytes, xSpace, xRequiredSpace );
+    xReturn = prvWriteMessageToBuffer( pxStreamBuffer, pvTxData, xDataLengthBytes, xPadding, xSpace, xRequiredSpace );
 
     if( xReturn > ( size_t ) 0 )
     {
@@ -654,6 +670,7 @@ size_t xStreamBufferSendFromISR( StreamBufferHandle_t xStreamBuffer,
     StreamBuffer_t * const pxStreamBuffer = xStreamBuffer;
     size_t xReturn, xSpace;
     size_t xRequiredSpace = xDataLengthBytes;
+    size_t xNewHead, xAlignedHead, xPadding = 0;
 
     configASSERT( pvTxData );
     configASSERT( pxStreamBuffer );
@@ -664,7 +681,16 @@ size_t xStreamBufferSendFromISR( StreamBufferHandle_t xStreamBuffer,
      * message. */
     if( ( pxStreamBuffer->ucFlags & sbFLAGS_IS_MESSAGE_BUFFER ) != ( uint8_t ) 0 )
     {
-        xRequiredSpace += sbBYTES_TO_STORE_MESSAGE_LENGTH;
+#ifdef sbMESSAGE_ALIGN
+        if( xDataLengthBytes >= sbMESSAGE_ALIGN )
+        {
+            xNewHead = pxStreamBuffer->xHead + sbBYTES_TO_STORE_MESSAGE_LENGTH;
+            xAlignedHead = __builtin_align_up( xNewHead, sbMESSAGE_ALIGN );
+            xPadding = xAlignedHead - xNewHead;
+        }
+#endif
+
+        xRequiredSpace += sbBYTES_TO_STORE_MESSAGE_LENGTH + xPadding;
     }
     else
     {
@@ -672,7 +698,7 @@ size_t xStreamBufferSendFromISR( StreamBufferHandle_t xStreamBuffer,
     }
 
     xSpace = xStreamBufferSpacesAvailable( pxStreamBuffer );
-    xReturn = prvWriteMessageToBuffer( pxStreamBuffer, pvTxData, xDataLengthBytes, xSpace, xRequiredSpace );
+    xReturn = prvWriteMessageToBuffer( pxStreamBuffer, pvTxData, xDataLengthBytes, xPadding, xSpace, xRequiredSpace );
 
     if( xReturn > ( size_t ) 0 )
     {
@@ -700,6 +726,7 @@ size_t xStreamBufferSendFromISR( StreamBufferHandle_t xStreamBuffer,
 static size_t prvWriteMessageToBuffer( StreamBuffer_t * const pxStreamBuffer,
                                        const void * pvTxData,
                                        size_t xDataLengthBytes,
+                                       size_t xPadding,
                                        size_t xSpace,
                                        size_t xRequiredSpace )
 {
@@ -737,6 +764,14 @@ static size_t prvWriteMessageToBuffer( StreamBuffer_t * const pxStreamBuffer,
 
     if( xShouldWrite != pdFALSE )
     {
+        /* Pad buffer as requested. */
+        pxStreamBuffer->xHead += xPadding;
+
+        if( pxStreamBuffer->xHead >= pxStreamBuffer->xLength )
+        {
+            pxStreamBuffer->xHead -= pxStreamBuffer->xLength;
+        }
+
         /* Writes the data itself. */
         xReturn = prvWriteBytesToBuffer( pxStreamBuffer, ( const uint8_t * ) pvTxData, xDataLengthBytes ); /*lint !e9079 Storage buffer is implemented as uint8_t for ease of sizing, alignment and access. */
     }
@@ -961,7 +996,7 @@ static size_t prvReadMessageFromBuffer( StreamBuffer_t * pxStreamBuffer,
                                         size_t xBytesAvailable,
                                         size_t xBytesToStoreMessageLength )
 {
-    size_t xOriginalTail, xReceivedLength, xNextMessageLength;
+    size_t xOriginalTail, xAlignedTail, xReceivedLength, xNextMessageLength;
     configMESSAGE_BUFFER_LENGTH_TYPE xTempNextMessageLength;
 
     if( xBytesToStoreMessageLength != ( size_t ) 0 )
@@ -992,6 +1027,23 @@ static size_t prvReadMessageFromBuffer( StreamBuffer_t * pxStreamBuffer,
         {
             mtCOVERAGE_TEST_MARKER();
         }
+
+#ifdef sbMESSAGE_ALIGN
+        /* If the message is big enough, there is padding between the length
+        word and the data to ensure the data remains sufficiently aligned. */
+        if( xNextMessageLength >= sbMESSAGE_ALIGN )
+        {
+             xAlignedTail = __builtin_align_up( pxStreamBuffer->xTail, sbMESSAGE_ALIGN );
+            xBytesAvailable -= xAlignedTail - pxStreamBuffer->xTail;
+
+            if( xAlignedTail >= pxStreamBuffer->xLength )
+            {
+                xAlignedTail -= pxStreamBuffer->xLength;
+            }
+
+            pxStreamBuffer->xTail = xAlignedTail;
+        }
+#endif
     }
     else
     {
