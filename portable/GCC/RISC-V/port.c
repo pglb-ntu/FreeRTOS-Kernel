@@ -29,7 +29,9 @@
  * Implementation of functions defined in portable.h for the RISC-V RV32 port.
  *----------------------------------------------------------*/
 
+#ifdef __CHERI_PURE_CAPABILITY__
 #include <cheric.h>
+#endif
 
 /* Scheduler includes. */
 #include "FreeRTOS.h"
@@ -69,18 +71,29 @@ stack that was used by main before the scheduler was started for use as the
 interrupt stack after the scheduler has started. */
 #ifdef configISR_STACK_SIZE_WORDS
 	static __attribute__ ((aligned(16))) StackType_t xISRStack[ configISR_STACK_SIZE_WORDS ] = { 0 };
+#ifdef __CHERI_PURE_CAPABILITY__
 	const StackType_t *xISRStackTop = &( xISRStack[ configISR_STACK_SIZE_WORDS & ~portBYTE_ALIGNMENT_MASK ] );
+#else
+	const StackType_t xISRStackTop = ( StackType_t ) &( xISRStack[ configISR_STACK_SIZE_WORDS & ~portBYTE_ALIGNMENT_MASK ] );
+#endif
 
 	/* Don't use 0xa5 as the stack fill bytes as that is used by the kernerl for
 	the task stacks, and so will legitimately appear in many positions within
 	the ISR stack. */
 	#define portISR_STACK_FILL_BYTE	0xee
 #else
+#ifdef __CHERI_PURE_CAPABILITY__
 	const StackType_t *xISRStackTop;
+#else
+	extern const uint32_t __freertos_irq_stack_top[];
+	const StackType_t xISRStackTop = ( StackType_t ) __freertos_irq_stack_top;
+#endif
 #endif
 
+#ifdef __CHERI_PURE_CAPABILITY__
 void *pvAlmightyDataCap;
 void *pvAlmightyCodeCap;
+#endif
 
 /*
  * Setup the timer to generate the tick interrupts.  The implementation in this
@@ -94,8 +107,9 @@ void vPortSetupTimerInterrupt( void ) __attribute__(( weak ));
 /* Used to program the machine timer compare register. */
 uint64_t ullNextTime = 0ULL;
 const uint64_t *pullNextTime = &ullNextTime;
-const size_t uxTimerIncrementsForOneTick = ( size_t ) ( configCPU_CLOCK_HZ / configTICK_RATE_HZ ); /* Assumes increment won't go over 32-bits. */
-volatile uint64_t * const pullMachineTimerCompareRegister = ( volatile uint64_t * const ) ( configCLINT_BASE_ADDRESS + 0x4000 );
+const size_t uxTimerIncrementsForOneTick = ( size_t ) ( ( configCPU_CLOCK_HZ ) / ( configTICK_RATE_HZ ) ); /* Assumes increment won't go over 32-bits. */
+uint32_t const ullMachineTimerCompareRegisterBase = configMTIMECMP_BASE_ADDRESS;
+volatile uint64_t * pullMachineTimerCompareRegister = NULL;
 
 /* Set configCHECK_FOR_STACK_OVERFLOW to 3 to add ISR stack checking to task
 stack checking.  A problem in the ISR stack will trigger an assert, not call the
@@ -124,13 +138,24 @@ task stack, not the ISR stack). */
 	void vPortSetupTimerInterrupt( void )
 	{
 	uint32_t ulCurrentTimeHigh, ulCurrentTimeLow;
-	volatile uint32_t * pulTimeHigh = cheri_setoffset(pvAlmightyDataCap, configCLINT_BASE_ADDRESS+0xBFFC);
+#ifdef __CHERI_PURE_CAPABILITY__
+	volatile uint32_t * pulTimeHigh = cheri_setoffset(pvAlmightyDataCap, configMTIME_BASE_ADDRESS+4UL);
         pulTimeHigh = cheri_csetbounds((void*)pulTimeHigh, sizeof(uint32_t));
-	volatile uint32_t * pulTimeLow = cheri_setoffset(pvAlmightyDataCap, configCLINT_BASE_ADDRESS+0xBFF8);
+	volatile uint32_t * pulTimeLow = cheri_setoffset(pvAlmightyDataCap, configMTIME_BASE_ADDRESS);
         pulTimeLow = cheri_csetbounds((void*)pulTimeLow, sizeof(uint32_t));
-	pullMachineTimerCompareRegister = cheri_setoffset(pvAlmightyDataCap, configCLINT_BASE_ADDRESS+0x4000);
-        pullMachineTimerCompareRegister = cheri_csetbounds((void*)pullMachineTimerCompareRegister, sizeof(uint64_t));
+	volatile uint32_t ulHartId;
 
+        __asm volatile( "csrr %0, mhartid" : "=r"( ulHartId ) );
+        pullMachineTimerCompareRegister = cheri_setoffset(pvAlmightyDataCap, ( ullMachineTimerCompareRegisterBase + ( ulHartId * sizeof( uint64_t ) )));
+        pullMachineTimerCompareRegister = cheri_csetbounds((void*)pullMachineTimerCompareRegister, sizeof(uint64_t));
+#else
+	volatile uint32_t * const pulTimeHigh = ( volatile uint32_t * const ) ( ( configMTIME_BASE_ADDRESS ) + 4UL ); /* 8-byte typer so high 32-bit word is 4 bytes up. */
+	volatile uint32_t * const pulTimeLow = ( volatile uint32_t * const ) ( configMTIME_BASE_ADDRESS );
+	volatile uint32_t ulHartId;
+
+		__asm volatile( "csrr %0, mhartid" : "=r"( ulHartId ) );
+		pullMachineTimerCompareRegister  = ( volatile uint64_t * ) ( ullMachineTimerCompareRegisterBase + ( ulHartId * sizeof( uint64_t ) ) );
+#endif
 		do
 		{
 			ulCurrentTimeHigh = *pulTimeHigh;
@@ -141,9 +166,7 @@ task stack, not the ISR stack). */
 		ullNextTime <<= 32ULL; /* High 4-byte word is 32-bits up. */
 		ullNextTime |= ( uint64_t ) ulCurrentTimeLow;
 		ullNextTime += ( uint64_t ) uxTimerIncrementsForOneTick;
-		(*pullMachineTimerCompareRegister)[1] = ~0;
-		(*pullMachineTimerCompareRegister)[0] = ullNextTime;
-		(*pullMachineTimerCompareRegister)[1] = (ullNextTime>>32);
+                *pullMachineTimerCompareRegister = ullNextTime;
 
 		/* Prepare the time to use after the next tick interrupt. */
 		ullNextTime += ( uint64_t ) uxTimerIncrementsForOneTick;

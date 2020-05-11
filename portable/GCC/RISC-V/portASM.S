@@ -56,10 +56,20 @@
  *
  */
 #if __riscv_xlen == 64
+#if __has_feature(capabilities)
+	#define portWORD_SIZE 16
+	#define store_x csc
+	#define load_x clc
+#else
 	#define portWORD_SIZE 8
 	#define store_x sd
 	#define load_x ld
 #elif __riscv_xlen == 32
+#if __has_feature(capabilities)
+	#define portWORD_SIZE 8
+	#define store_x csc
+	#define load_x clc
+#else
 	#define store_x sw
 	#define load_x lw
 	#define portWORD_SIZE 4

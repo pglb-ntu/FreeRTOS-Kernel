@@ -33,7 +33,10 @@
  * memory management pages of https://www.FreeRTOS.org for more information.
  */
 #include <stdlib.h>
+
+#ifdef __CHERI_PURE_CAPABILITY__
 #include <cheric.h>
+#endif
 
 /* Defining MPU_WRAPPERS_INCLUDED_FROM_API_FILE prevents task.h from redefining
  * all the API functions to use the MPU wrappers.  That should only be done when
@@ -117,7 +120,10 @@ void * pvPortMalloc( size_t xWantedSize )
 {
     BlockLink_t * pxBlock, * pxPreviousBlock, * pxNewBlockLink;
     void * pvReturn = NULL;
+
+#ifdef __CHERI_PURE_CAPABILITY__
     size_t xCallerWantedSize = xWantedSize;
+#endif
 
     vTaskSuspendAll();
     {
@@ -270,7 +276,9 @@ void * pvPortMalloc( size_t xWantedSize )
     #endif /* if ( configUSE_MALLOC_FAILED_HOOK == 1 ) */
 
     configASSERT( ( ( ( size_t ) pvReturn ) & ( size_t ) portBYTE_ALIGNMENT_MASK ) == 0 );
+#ifdef __CHERI_PURE_CAPABILITY__
     pvReturn = cheri_csetbounds(pvReturn, xCallerWantedSize);
+#endif
     return pvReturn;
 }
 /*-----------------------------------------------------------*/
@@ -284,12 +292,14 @@ void vPortFree( void * pv )
     {
         /* The memory being freed will have an BlockLink_t structure immediately
          * before it. */
+#ifdef __CHERI_PURE_CAPABILITY__
         /* For purecap, the bounds are set in malloc, so we cannot just take the
         capability and subtract base. We have to rederive. */
         puc = ucHeap;
         size_t pvAddr = cheri_getaddress(pv);
         size_t pucBase = cheri_getbase(puc);
         puc = cheri_setoffset(puc, pvAddr - pucBase);
+#endif
         puc -= xHeapStructSize;
 
         /* This casting is to keep the compiler from issuing warnings. */
