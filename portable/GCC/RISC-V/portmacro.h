@@ -175,6 +175,23 @@ definition is found. */
 
 
 
+/*
+ * Install a RISC-V exception handler to be optionally used if
+ * configPORT_ALLOW_APP_EXCEPTION_HANDLERS is set to one.
+ *
+ * Exception handler functions must return a non-zero value if executing the
+ * handler resulted in a task switch being required.
+ */
+void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHandler)( void *pvParameter ) );
+
+/*
+ * A C-entry to a shared exception handler. ulExceptiontNumber is mcuase ane
+ * mepc is the exception address.
+ * exception_frame is a pointer to the register context, including GPRs and
+ * CSRs. It is passed to the user for further debugging.
+ */
+void vPortExceptionHandler( UBaseType_t  ulExceptiontNumber, uintptr_t ulmepc, uintptr_t *exception_frame );
+
 #ifdef __cplusplus
 }
 #endif

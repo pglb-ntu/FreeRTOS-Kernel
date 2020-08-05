@@ -94,6 +94,26 @@ interrupt stack after the scheduler has started. */
 #endif
 #endif
 
+#if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
+	static uintptr_t riscv_exceptions_table[64] = {NULL};
+
+	void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHandler)( void *pvParameter) )
+	{
+		configASSERT(ulExceptiontNumber <= 64);
+		riscv_exceptions_table[ulExceptiontNumber] = pvHandler;
+	}
+
+	void vPortExceptionHandler( UBaseType_t  ulExceptiontNumber, uintptr_t ulmepc, uintptr_t *exception_frame )
+	{
+		uint32_t (*handler)( void *pvParam ) =  (void *) riscv_exceptions_table[ulExceptiontNumber];
+
+		if( handler )
+		{
+			handler( exception_frame );
+		}
+	}
+#endif
+
 #ifdef __CHERI_PURE_CAPABILITY__
 void *pvAlmightyDataCap;
 void *pvAlmightyCodeCap;
