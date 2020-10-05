@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel V10.4.3
- * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS Kernel V10.2.1
+ * Copyright (C) 2019 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,8 +19,8 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * https://www.FreeRTOS.org
- * https://github.com/FreeRTOS
+ * http://www.FreeRTOS.org
+ * http://aws.amazon.com/freertos
  *
  * 1 tab == 4 spaces!
  */
@@ -84,7 +84,7 @@ interrupt stack after the scheduler has started. */
 	/* Don't use 0xa5 as the stack fill bytes as that is used by the kernerl for
 	the task stacks, and so will legitimately appear in many positions within
 	the ISR stack. */
-	#define portISR_STACK_FILL_BYTE	0xee
+	#define portISR_STACK_FILL_BYTE	0xee	
 #else
 #ifdef __CHERI_PURE_CAPABILITY__
 	const StackType_t *xISRStackTop;
@@ -117,6 +117,8 @@ interrupt stack after the scheduler has started. */
 #ifdef __CHERI_PURE_CAPABILITY__
 void *pvAlmightyDataCap;
 void *pvAlmightyCodeCap;
+
+#define COMPARTMENT_RETURN_OTYPE 4095
 #endif
 
 /*
@@ -164,14 +166,14 @@ task stack, not the ISR stack). */
 	uint32_t ulCurrentTimeHigh, ulCurrentTimeLow;
 #ifdef __CHERI_PURE_CAPABILITY__
 	volatile uint32_t * pulTimeHigh = cheri_setoffset(pvAlmightyDataCap, configMTIME_BASE_ADDRESS+4UL);
-        pulTimeHigh = cheri_csetbounds((void*)pulTimeHigh, sizeof(uint32_t));
+	pulTimeHigh = cheri_csetbounds((void*)pulTimeHigh, sizeof(uint32_t));
 	volatile uint32_t * pulTimeLow = cheri_setoffset(pvAlmightyDataCap, configMTIME_BASE_ADDRESS);
-        pulTimeLow = cheri_csetbounds((void*)pulTimeLow, sizeof(uint32_t));
+	pulTimeLow = cheri_csetbounds((void*)pulTimeLow, sizeof(uint32_t));
 	volatile uint32_t ulHartId;
 
-        __asm volatile( "csrr %0, mhartid" : "=r"( ulHartId ) );
-        pullMachineTimerCompareRegister = cheri_setoffset(pvAlmightyDataCap, ( ullMachineTimerCompareRegisterBase + ( ulHartId * sizeof( uint64_t ) )));
-        pullMachineTimerCompareRegister = cheri_csetbounds((void*)pullMachineTimerCompareRegister, sizeof(uint64_t));
+		__asm volatile( "csrr %0, mhartid" : "=r"( ulHartId ) );
+		pullMachineTimerCompareRegister = cheri_setoffset(pvAlmightyDataCap, ( ullMachineTimerCompareRegisterBase + ( ulHartId * sizeof( uint64_t ) )));
+		pullMachineTimerCompareRegister = cheri_csetbounds((void*)pullMachineTimerCompareRegister, sizeof(uint64_t));
 #else
 	volatile uint32_t * const pulTimeHigh = ( volatile uint32_t * const ) ( ( configMTIME_BASE_ADDRESS ) + 4UL ); /* 8-byte typer so high 32-bit word is 4 bytes up. */
 	volatile uint32_t * const pulTimeLow = ( volatile uint32_t * const ) ( configMTIME_BASE_ADDRESS );
@@ -190,7 +192,7 @@ task stack, not the ISR stack). */
 		ullNextTime <<= 32ULL; /* High 4-byte word is 32-bits up. */
 		ullNextTime |= ( uint64_t ) ulCurrentTimeLow;
 		ullNextTime += ( uint64_t ) uxTimerIncrementsForOneTick;
-                *pullMachineTimerCompareRegister = ullNextTime;
+		*pullMachineTimerCompareRegister = ullNextTime;
 
 		/* Prepare the time to use after the next tick interrupt. */
 		ullNextTime += ( uint64_t ) uxTimerIncrementsForOneTick;
@@ -198,6 +200,28 @@ task stack, not the ISR stack). */
 
 #endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIME_BASE_ADDRESS != 0 ) */
 /*-----------------------------------------------------------*/
+
+#ifdef __CHERI_PURE_CAPABILITY__
+	#if ( portHAS_COMPARTMENT == 1 )
+	void ( * pxPortCompartmentReturnTrampoline ) ( void );
+	void ( * pxPortCompartmentReturnFunc ) ( BaseType_t xReturn );
+	BaseType_t *pxPortCompartmentReturnData;
+
+	static void vPortCompartmentSetup( void )
+	{
+	extern void ( * pxPortCompartmentGetReturnTrampoline( void ) ) ( void );
+	extern void xPortCompartmentReturn( BaseType_t xReturn );
+	void *pvReturnSealer;
+
+		pxPortCompartmentReturnTrampoline = pxPortCompartmentGetReturnTrampoline();
+
+		pvReturnSealer = cheri_setaddress( pvAlmightyDataCap, COMPARTMENT_RETURN_OTYPE );
+		pxPortCompartmentReturnFunc = cheri_setaddress( pvAlmightyCodeCap, ( ptraddr_t )  xPortCompartmentReturn );
+		pxPortCompartmentReturnFunc = cheri_seal( pxPortCompartmentReturnFunc, pvReturnSealer );
+		pxPortCompartmentReturnData = cheri_seal( pvAlmightyDataCap, pvReturnSealer );
+	}
+	#endif
+#endif
 
 BaseType_t xPortStartScheduler( void )
 {
@@ -215,11 +239,11 @@ extern void xPortStartFirstTask( void );
 		/* Check alignment of the interrupt stack - which is the same as the
 		stack that was being used by main() prior to the scheduler being
 		started. */
-		configASSERT( (  ( size_t ) xISRStackTop & portBYTE_ALIGNMENT_MASK ) == 0 );
+		configASSERT( ( (size_t)xISRStackTop & portBYTE_ALIGNMENT_MASK ) == 0 );
 
 		#ifdef configISR_STACK_SIZE_WORDS
 		{
-			memset( ( void * ) xISRStack, portISR_STACK_FILL_BYTE, sizeof( xISRStack ) );
+			memset( (size_t)xISRStack, portISR_STACK_FILL_BYTE, sizeof( xISRStack ) );
 		}
 		#endif	 /* configISR_STACK_SIZE_WORDS */
 	}
@@ -243,6 +267,12 @@ extern void xPortStartFirstTask( void );
 		__asm volatile( "csrs mie, %0" :: "r"(0x800) );
 	}
 	#endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIMECMP_BASE_ADDRESS != 0 ) */
+
+#ifdef __CHERI_PURE_CAPABILITY__
+    #if ( portHAS_COMPARTMENT == 1 )
+        vPortCompartmentSetup();
+    #endif
+#endif
 
 	xPortStartFirstTask();
 

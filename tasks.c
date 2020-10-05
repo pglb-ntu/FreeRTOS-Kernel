@@ -5401,3 +5401,11 @@ static void prvAddCurrentTaskToDelayedList( TickType_t xTicksToWait,
     #endif
 
 #endif /* if ( configINCLUDE_FREERTOS_TASK_C_ADDITIONS_H == 1 ) */
+
+#if ( portHAS_COMPARTMENT == 1 )
+    xCOMPARTMENT_RET xTaskRunCompartment( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID )
+    {
+        // TODO: We might want to allocate the stack here then free/zero it on return
+        return xPortCompartmentEnter( pxFunction, pxData, pxArgs, xCompID );
+    }
+#endif

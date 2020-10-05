@@ -207,6 +207,10 @@ void vPortEndScheduler( void ) PRIVILEGED_FUNCTION;
                                     uint32_t ulStackDepth ) PRIVILEGED_FUNCTION;
 #endif
 
+#if ( portHAS_COMPARTMENT == 1 )
+    xCOMPARTMENT_RET xPortCompartmentEnter( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID ) PRIVILEGED_FUNCTION;
+#endif
+
 /* *INDENT-OFF* */
 #ifdef __cplusplus
     }
