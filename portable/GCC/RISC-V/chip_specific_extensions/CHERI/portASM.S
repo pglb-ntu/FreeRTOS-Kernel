@@ -286,10 +286,10 @@ test_if_environment_call:
 	beq               zero, zero, processed_source
 
 is_exception:
-	csrr              t1, mccsr
-	li                t0, (0x19  << 5) # CCall
-	and               t1, t0, t1
-	bne               t0, t1, .Ltest_if_in_compartment
+	#csrr              t1, mccsr
+	#li                t0, (0x19  << 5) # CCall
+	#and               t1, t0, t1
+	#bne               t0, t1, 1f
 
 #if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
 	/* a0 and a1 should already have mcause and mepcc,
