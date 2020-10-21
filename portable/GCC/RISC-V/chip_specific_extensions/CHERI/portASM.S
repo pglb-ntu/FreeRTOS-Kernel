@@ -239,14 +239,15 @@ handle_asynchronous:
 		clgc            ct0, xTaskIncrementTick
 		cjalr           cra, ct0
 
+		beqz            a0, 1f /* Don't switch context if incrementing tick didn't unblock a task. */
+		clgc            ct0, vTaskSwitchContext
+		cjalr           cra, ct0
+
+1:
 		clgc            ct1, pxCurrentTCB # Load cap to pxCurrentTCB.
 		clc             ct1, 0(ct1) # Load pxCurrentTCB.
 		load_x          csp, 0(ct1) # Read sp from first TCB member.
 		beq             zero, zero, processed_source
-
-		beqz            a0, processed_source /* Don't switch context if incrementing tick didn't unblock a task. */
-		clgc            ct0, vTaskSwitchContext
-		cjalr           cra, ct0
 
 	test_if_external_interrupt: /* If there is a CLINT and the mtimer interrupt is not pending then check to see if an external interrupt is pending. */
 		addi            t1, t1, 4 /* 0x80000007 + 4 = 0x8000000b == Machine external interrupt. */
