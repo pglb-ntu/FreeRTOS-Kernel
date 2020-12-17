@@ -178,8 +178,7 @@ definition is found. */
 #define portHAS_COMPARTMENT 1
 
 typedef struct {
-    BaseType_t a0;
-    BaseType_t a1;
+    uintcap_t ca0;
 } xCOMPARTMENT_RET;
 
 typedef struct {
