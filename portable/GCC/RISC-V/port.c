@@ -118,7 +118,7 @@ interrupt stack after the scheduler has started. */
 void *pvAlmightyDataCap;
 void *pvAlmightyCodeCap;
 
-#define COMPARTMENT_RETURN_OTYPE 4095
+#define COMPARTMENT_RETURN_OTYPE (configCOMPARTMENTS_NUM - 1)
 #endif
 
 /*

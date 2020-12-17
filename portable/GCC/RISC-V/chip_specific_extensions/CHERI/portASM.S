@@ -302,7 +302,7 @@ is_exception:
 
 .Ltest_if_in_compartment:
 	csrr              t0, mscratch
-	li                t1, 4095
+	li                t1, configCOMPARTMENTS_NUM - 1
 	bne               t0, t1, xPortCompartmentTrapReturn
 
 .Lbreak_on_exception:
@@ -388,8 +388,8 @@ xPortStartFirstTask:
 	load_x            ct0, 32 * portWORD_SIZE(csp) # mstatus
 	csrw              mstatus, t0 /* Required for MPIE bit. */
 
-	# Put compID of 4095 (non-compartment) in mscratchc
-	li                t0, 4095
+	# Put compID of configCOMPARTMENTS_NUM -1 (non-compartment) in mscratchc
+	li                t0, configCOMPARTMENTS_NUM - 1
 	csrw              mscratch, t0
 
 	load_x            c1, 1 * portWORD_SIZE(csp)
@@ -596,7 +596,7 @@ xPortCompartmentEnter:
 	store_x           csp, 1 * portWORD_SIZE(ct3) # Write the caller's compartment stack.
 
 	cmove             ca0, csp
-	li                a1, 4095
+	li                a1, configCOMPARTMENTS_NUM - 1
 	clgc              ct3, cheri_seal_cap
 	cjalr             cra, ct3
 	cmove             cs1, ca0
