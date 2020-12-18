@@ -629,12 +629,6 @@ xPortCompartmentEnter:
 	clgc              cs0, pxPortCompartmentReturnFunc
 	clc               cs0, 0(cs0)
 
-	/* Load the stack cap. ct6 has pxData which is the captable for the compartment
-	 * The loader install the compartment's stack in the very first slot of the
-	 * captable.
-	 */
-	clc               csp, 0 * portWORD_SIZE(ct6)
-
 	/* Beyond this point we count as inside the compartment */
 
 	/* Clear registers */
