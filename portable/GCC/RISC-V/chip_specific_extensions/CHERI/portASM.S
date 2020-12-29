@@ -260,6 +260,11 @@ handle_asynchronous:
 	clgc              ct0, portasmHANDLE_INTERRUPT
 	cjalr             cra, ct0 # Jump to the interrupt handler if there is no CLINT or if there is a CLINT and it has been determined that an external interrupt is pending.
 
+	beqz              a0, 1f /* Don't switch context if external interrupt didn't unblock a task. */
+	clgc              ct0, vTaskSwitchContext
+	cjalr             cra, ct0
+
+1:
 	clgc              ct1, pxCurrentTCB # Load cap to pxCurrentTCB.
 	clc               ct1, 0(ct1) # Load pxCurrentTCB.
 	load_x            csp, 0(ct1) # Read sp from first TCB member.
