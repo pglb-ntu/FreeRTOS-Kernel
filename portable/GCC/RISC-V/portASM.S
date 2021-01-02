@@ -200,10 +200,12 @@ handle_asynchronous:
 		#if( __riscv_xlen == 64 )
 
 			/* Update the 64-bit mtimer compare match value. */
-			cld  t2, 0(ct1)			 	/* Load ullNextTime into t2. */
-			csd  t2, 0(ct0)				/* Store ullNextTime into compare register. */
-			add  t4, t0, t2				/* Add the low word of ullNextTime to the timer increments for one tick (assumes timer increment for one tick fits in 32-bits). */
-			csd  t4, 0(ct1)				/* Store ullNextTime. */
+			ld t2, 0(t1)			 	/* Load ullNextTime into t2. */
+			sd t2, 0(t0)				/* Store ullNextTime into compare register. */
+			ld t0, uxTimerIncrementsForOneTick  /* Load the value of ullTimerIncrementForOneTick into t0 (could this be optimized by storing in an array next to pullNextTime?). */
+			add t4, t0, t2				/* Add ullNextTime to the timer increments for one tick. */
+			sd t4, 0(t1)				/* Store ullNextTime. */
+
 		#endif /* __riscv_xlen == 64 */
 
 		load_x sp, xISRStackTop			/* Switch to ISR stack before function call. */
