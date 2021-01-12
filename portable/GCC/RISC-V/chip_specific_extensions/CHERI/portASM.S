@@ -166,7 +166,7 @@ freertos_risc_v_trap_handler:
 
 	# Save the current CompID
 	csrr              a0, mscratch
-	store_x           ca3, 34 * portWORD_SIZE(csp)
+	store_x           ca0, 34 * portWORD_SIZE(csp)
 
 	portasmSAVE_ADDITIONAL_REGISTERS /* Defined in freertos_risc_v_chip_specific_extensions.h to save any registers unique to the RISC-V implementation. */
 
@@ -513,6 +513,8 @@ pxPortInitialiseStack:
 	cgettag           t0, cgp
 	beqz              t0, 1f
 	store_x           cgp, 3 * portWORD_SIZE(ca0)
+	csrr              t0, mscratch
+	store_x           ct0, 34 * portWORD_SIZE(ca0)
 1:
 	addi              t0, x0, 0x188 /* Generate the value 0x1880, which are the MPIE and MPP bits to set in mstatus. */
 	slli              t0, t0, 4
@@ -593,7 +595,7 @@ xPortCompartmentEnter:
 
 	# Save current CompID
 	csrr              a0, mscratch
-	store_x           ca3, 34 * portWORD_SIZE(csp)
+	store_x           ca0, 34 * portWORD_SIZE(csp)
 
 	portasmSAVE_ADDITIONAL_REGISTERS
 
@@ -614,7 +616,7 @@ xPortCompartmentEnter:
 	store_x           csp, 0(ct3)
 
 	# Set the current compartment ID in mscratch
-	csrw              mscratch, a3
+	csrw              mscratch, t2
 
 	/* Load arguments for compartment */
 	clc               ca0, 0 * portWORD_SIZE(ct1)
