@@ -101,6 +101,7 @@ at the top of this file. */
 .global xPortStartFirstTask
 .global freertos_risc_v_trap_handler
 .global pxPortInitialiseStack
+.global xPortGetCurrentCompartmentID
 .global xPortCompartmentEnter
 .global pxPortCompartmentGetReturnTrampoline
 .global xPortCompartmentReturn
@@ -537,6 +538,14 @@ pxPortInitialiseStackEnd:
 .size pxPortInitialiseStack, pxPortInitialiseStackEnd - pxPortInitialiseStack
 /*-----------------------------------------------------------*/
 
+/* BaseType_t xPortGetCurrentCompartmentID( void ) PRIVILEGED_FUNCTION; */
+.align 8
+.type xPortGetCurrentCompartmentID, %function
+xPortGetCurrentCompartmentID:
+	csrr a0, mscratch
+	cret
+.size xPortGetCurrentCompartmentID, . - xPortGetCurrentCompartmentID
+/*-----------------------------------------------------------*/
 
 /* BaseType_t xPortCompartmentEnter( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID ) PRIVILEGED_FUNCTION; */
 .align 8
