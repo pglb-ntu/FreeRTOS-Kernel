@@ -102,6 +102,8 @@ at the top of this file. */
 .global freertos_risc_v_trap_handler
 .global pxPortInitialiseStack
 .global xPortGetCurrentCompartmentID
+.global xPortCompartmentEnterTrampoline
+.global xPortCompartmentEnterTrampolineEnd
 .global xPortCompartmentEnter
 .global pxPortCompartmentGetReturnTrampoline
 .global xPortCompartmentReturn
@@ -545,6 +547,43 @@ xPortGetCurrentCompartmentID:
 	csrr a0, mscratch
 	cret
 .size xPortGetCurrentCompartmentID, . - xPortGetCurrentCompartmentID
+/*-----------------------------------------------------------*/
+
+/* BaseType_t xPortCompartmentEnterTrampoline PRIVILEGED_FUNCTION; */
+.balign 16
+.type xPortCompartmentEnterTrampoline, %function
+xPortCompartmentEnterTrampoline:
+.Lfunc:      .zero 16
+.Lcaptable:  .zero 16
+.Lsaved_cgp: .zero 16
+.Lsaved_cra: .zero 16
+
+	/* Save $cra */
+compartment_enter_code:
+cllc ct0, .Lsaved_cra
+store_x cra, 0(ct0)
+
+	/* Save $cgp */
+cllc ct0, .Lsaved_cgp
+store_x cgp, 0(ct0)
+
+	/* get new $cgp
+
+	/* Load $cgp with callee's captable */
+	/* Load ct0 with the code cap */
+
+	/* Load $cra */
+cllc ct0, .Lsaved_cra
+load_x cra, 0(ct0)
+
+	/* Load $cgp */
+cllc ct0, .Lsaved_cgp
+load_x cgp, 0(ct0)
+
+	/* cret */
+cret
+xPortCompartmentEnterTrampolineEnd:
+.size xPortCompartmentEnterTrampoline, . - xPortCompartmentEnterTrampoline
 /*-----------------------------------------------------------*/
 
 /* BaseType_t xPortCompartmentEnter( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID ) PRIVILEGED_FUNCTION; */
