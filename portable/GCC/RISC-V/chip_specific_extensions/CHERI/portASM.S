@@ -325,6 +325,9 @@ as_yet_unhandled:
 	beq               zero, zero, as_yet_unhandled
 
 processed_source:
+	clgc              ct0, pxCurrentTCB # Load cap to pxCurrentTCB.
+	clc               ct0, 0(ct0) # Load pxCurrentTCB.
+	cspecialw         mscratchc, ct0
 
 	portasmRESTORE_ADDITIONAL_REGISTERS	/* Defined in freertos_risc_v_chip_specific_extensions.h to restore any registers unique to the RISC-V implementation. */
 
@@ -380,6 +383,7 @@ processed_source:
 xPortStartFirstTask:
 	clgc              ct0, pxCurrentTCB # Load the cap to pxCurrentTCB.
 	clc               ct0, 0(ct0) # Load pxCurrentTCB.
+	cspecialw         mscratchc, ct0
 	load_x            csp, 0(ct0) # Read sp from first TCB member.
 
 	portasmRESTORE_ADDITIONAL_REGISTERS /* Defined in freertos_risc_v_chip_specific_extensions.h to restore any registers unique to the RISC-V implementation. */
