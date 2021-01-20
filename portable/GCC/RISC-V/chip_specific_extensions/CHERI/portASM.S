@@ -122,7 +122,18 @@ at the top of this file. */
 #if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
 .extern vPortExceptionHandler
 #endif
+/*-----------------------------------------------------------*/
 
+.macro getCurrentPerTCBCompartment reg_return
+	cspecialr         c\reg_return, mscratchc
+	clw               \reg_return, 1 * portWORD_SIZE(c\reg_return) # Read xCompID from second TCB member.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro setCurrentPerTCBCompartment reg_temp, compid
+	cspecialr         \reg_temp, mscratchc
+	csw               \compid, 1 * portWORD_SIZE(\reg_temp) # Store xCompID from second TCB member.
+.endm
 /*-----------------------------------------------------------*/
 
 .align 8
@@ -166,10 +177,6 @@ freertos_risc_v_trap_handler:
 
 	cspecialr         ct0, ddc
 	store_x           ct0, 33 * portWORD_SIZE(csp)
-
-	# Save the current CompID
-	csrr              a0, mscratch
-	store_x           ca0, 34 * portWORD_SIZE(csp)
 
 	portasmSAVE_ADDITIONAL_REGISTERS /* Defined in freertos_risc_v_chip_specific_extensions.h to save any registers unique to the RISC-V implementation. */
 
@@ -391,18 +398,11 @@ xPortStartFirstTask:
 	load_x            ct0, 0 * portWORD_SIZE(csp)
 	cspecialw         mepcc, ct0 # Write mepcc.
 
-	load_x            ct0, 34 * portWORD_SIZE(csp)
-	csrw              mscratch, t0
-
 	load_x            ct0, 33 * portWORD_SIZE(csp)
 	cspecialw         ddc, ct0
 
 	load_x            ct0, 32 * portWORD_SIZE(csp) # mstatus
 	csrw              mstatus, t0 /* Required for MPIE bit. */
-
-	# Put compID of configCOMPARTMENTS_NUM -1 (non-compartment) in mscratchc
-	li                t0, configCOMPARTMENTS_NUM - 1
-	csrw              mscratch, t0
 
 	load_x            c1, 1 * portWORD_SIZE(csp)
 	load_x            c3, 3 * portWORD_SIZE(csp)
@@ -516,12 +516,6 @@ pxPortInitialiseStack:
 	cincoffset        ca0, ca0, -portCONTEXT_SIZE
 	store_x           cnull, 1 * portWORD_SIZE(ca0) # return address onto the stack, could be portTASK_RETURN_ADDRESS
 	store_x           ca2, 10 * portWORD_SIZE(ca0) # Task parameters (pvParameters parameter) go into register X10/a0 on the stack.
-
-	cgettag           t0, cgp
-	beqz              t0, 1f
-	store_x           cgp, 3 * portWORD_SIZE(ca0)
-	csrr              t0, mscratch
-	store_x           ct0, 34 * portWORD_SIZE(ca0)
 1:
 	addi              t0, x0, 0x188 /* Generate the value 0x1880, which are the MPIE and MPP bits to set in mstatus. */
 	slli              t0, t0, 4
@@ -548,7 +542,7 @@ pxPortInitialiseStackEnd:
 .align 8
 .type xPortGetCurrentCompartmentID, %function
 xPortGetCurrentCompartmentID:
-	csrr a0, mscratch
+	getCurrentPerTCBCompartment a0
 	cret
 .size xPortGetCurrentCompartmentID, . - xPortGetCurrentCompartmentID
 /*-----------------------------------------------------------*/
@@ -646,7 +640,7 @@ xPortCompartmentEnter:
 	store_x           ca0, 33 * portWORD_SIZE(csp)
 
 	# Save current CompID
-	csrr              a0, mscratch
+	getCurrentPerTCBCompartment a0
 	store_x           ca0, 34 * portWORD_SIZE(csp)
 
 	portasmSAVE_ADDITIONAL_REGISTERS
@@ -668,7 +662,7 @@ xPortCompartmentEnter:
 	store_x           csp, 0(ct3)
 
 	# Set the current compartment ID in mscratch
-	csrw              mscratch, t2
+	setCurrentPerTCBCompartment ca0, t2
 
 	/* Load arguments for compartment */
 	clc               ca0, 0 * portWORD_SIZE(ct1)
@@ -782,7 +776,7 @@ xPortCompartmentReturn:
 	/* Beyond this point we count as outside the compartment */
 
 	load_x            ct0, 34 * portWORD_SIZE(csp)
-	csrw              mscratch, t0
+	setCurrentPerTCBCompartment ca0, t0
 
 	load_x            ct0, 33 * portWORD_SIZE(csp)
 	cspecialw         ddc, ct0
@@ -831,10 +825,6 @@ xPortCompartmentReturn:
 .align 8
 .type xPortCompartmentTrapReturn, %function
 xPortCompartmentTrapReturn:
-	#clgc              ct0, pxCurrentTCB /* &pxCurrentTCB */
-	#clc               ct0, 0(ct0) /* pxCurrentTCB */
-	#clc               csp, 1 * portWORD_SIZE(ct0) # Read context
-
 	clgc              csp, pxPortCompartmentReturnData
 	clc               csp, 0(csp)
 
@@ -847,7 +837,7 @@ xPortCompartmentTrapReturn:
 	csrw              mstatus, t0
 
 	load_x            ct0, 34 * portWORD_SIZE(csp)
-	csrw              mscratch, t0
+	setCurrentPerTCBCompartment ct1, t0
 
 	load_x            c1, 1 * portWORD_SIZE(csp)
 	/* c2 is csp */
