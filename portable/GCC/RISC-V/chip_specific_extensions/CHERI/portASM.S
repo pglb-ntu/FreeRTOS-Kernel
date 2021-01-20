@@ -553,33 +553,49 @@ xPortGetCurrentCompartmentID:
 xPortCompartmentEnterTrampoline:
 .Lfunc:      .zero 16
 .Lcaptable:  .zero 16
-.Lsaved_cgp: .zero 16
-.Lsaved_cra: .zero 16
+.Lcompid:    .zero 16
 
-	/* Save $cra */
 compartment_enter_code:
-cllc ct0, .Lsaved_cra
-store_x cra, 0(ct0)
 
-	/* Save $cgp */
-cllc ct0, .Lsaved_cgp
-store_x cgp, 0(ct0)
+	cincoffset csp, csp, -(16 * 3)
 
-	/* get new $cgp
+	/* Save cra, cgp and current CompID in the callers' stack */
+	store_x cra, 0(csp)
+	store_x cgp, 1 * portWORD_SIZE(csp)
+	getCurrentPerTCBCompartment t1
+	store_x ct1, 2 * portWORD_SIZE(csp)
 
-	/* Load $cgp with callee's captable */
-	/* Load ct0 with the code cap */
+	/* Load new dest compid, captable, and compartment function cap */
+	cllc ct0, .Lcompid
+	load_x ct0, 0(ct0)
+	setCurrentPerTCBCompartment ct1, t0
 
-	/* Load $cra */
-cllc ct0, .Lsaved_cra
-load_x cra, 0(ct0)
+	cllc   cgp, .Lcaptable
+	load_x cgp, 0(cgp)
+	load_x cgp, 0(cgp)
 
-	/* Load $cgp */
-cllc ct0, .Lsaved_cgp
-load_x cgp, 0(ct0)
+	cllc   ct0, .Lfunc
+	load_x ct0, 0(ct0)
+
+	/* Beyond this point, we are now in a new compartment */
+
+        /* ------------------- */
+
+        /* GO! */
+	cjalr   cra, ct0
+
+        /* ------------------- */
+
+	/* Compartment returned, retrieve caller's state */
+	load_x cra, 0(csp)
+	load_x cgp, 1 * portWORD_SIZE(csp)
+	load_x ct0, 2 * portWORD_SIZE(csp)
+	setCurrentPerTCBCompartment ct1, t0
+
+	cincoffset csp, csp, (16 * 3)
 
 	/* cret */
-cret
+	cret
 xPortCompartmentEnterTrampolineEnd:
 .size xPortCompartmentEnterTrampoline, . - xPortCompartmentEnterTrampoline
 /*-----------------------------------------------------------*/
