@@ -1170,6 +1170,9 @@ typedef struct xSTATIC_LIST
 typedef struct xSTATIC_TCB
 {
     void * pxDummy1;
+    #if ( portHAS_COMPARTMENT == 1 )
+        UBaseType_t xCompID;
+    #endif
     #if ( portUSING_MPU_WRAPPERS == 1 )
         xMPU_SETTINGS xDummy2;
     #endif
