@@ -68,6 +68,10 @@
 	#error Assembler did not define __riscv_xlen
 #endif
 
+#if __waf__
+#include <waf_config.h>
+#endif /* __waf__ */
+
 #include "freertos_risc_v_chip_specific_extensions.h"
 
 /* Check the freertos_risc_v_chip_specific_extensions.h and/or command line
