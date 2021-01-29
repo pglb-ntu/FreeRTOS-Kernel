@@ -106,6 +106,8 @@ at the top of this file. */
 .global freertos_risc_v_trap_handler
 .global pxPortInitialiseStack
 .global xPortGetCurrentCompartmentID
+.global xPortGetCurrentCompartmentStack
+.global xPortGetCurrentCompartmentReturn
 .global xPortCompartmentEnterTrampoline
 .global xPortCompartmentEnterTrampolineEnd
 .global xPortCompartmentEnter
@@ -130,13 +132,27 @@ at the top of this file. */
 
 .macro getCurrentPerTCBCompartment reg_return
 	cspecialr         c\reg_return, mscratchc
-	clw               \reg_return, 1 * portWORD_SIZE(c\reg_return) # Read xCompID from second TCB member.
+	clw               \reg_return, 3 * portWORD_SIZE(c\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
 .endm
 /*-----------------------------------------------------------*/
 
-.macro setCurrentPerTCBCompartment reg_temp, compid
+.macro getCurrentPerTCBCompartmentStack reg_return
+	cspecialr         c\reg_return, mscratchc
+	load_x            c\reg_return, 2 * portWORD_SIZE(c\reg_return) # Read return stack from second xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro getCurrentPerTCBCompartmentReturn reg_return
+	cspecialr         c\reg_return, mscratchc
+	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return) # Read return cap from xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro setCurrentPerTCBCompartment reg_temp, compid, ret_cap
 	cspecialr         \reg_temp, mscratchc
-	csw               \compid, 1 * portWORD_SIZE(\reg_temp) # Store xCompID from second TCB member.
+	store_x           \ret_cap, 1 * portWORD_SIZE(\reg_temp)
+	store_x           csp, 2 * portWORD_SIZE(\reg_temp)
+	csw               \compid, 3 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
 .endm
 /*-----------------------------------------------------------*/
 
@@ -549,6 +565,22 @@ xPortGetCurrentCompartmentID:
 	getCurrentPerTCBCompartment a0
 	cret
 .size xPortGetCurrentCompartmentID, . - xPortGetCurrentCompartmentID
+
+/* uintcap_t xPortGetCurrentCompartmentStack( void ) PRIVILEGED_FUNCTION; */
+.align 8
+.type xPortGetCurrentCompartmentStack, %function
+xPortGetCurrentCompartmentStack:
+	getCurrentPerTCBCompartmentStack a0
+	cret
+.size xPortGetCurrentCompartmentStack, . - xPortGetCurrentCompartmentStack
+
+/* uintcap_t xPortGetCurrentCompartmentReturn( void ) PRIVILEGED_FUNCTION; */
+.align 8
+.type xPortGetCurrentCompartmentReturn, %function
+xPortGetCurrentCompartmentReturn:
+	getCurrentPerTCBCompartmentReturn a0
+	cret
+.size xPortGetCurrentCompartmentReturn, . - xPortGetCurrentCompartmentReturn
 /*-----------------------------------------------------------*/
 
 /* BaseType_t xPortCompartmentEnterTrampoline PRIVILEGED_FUNCTION; */
@@ -564,10 +596,11 @@ compartment_enter_code:
 	cincoffset csp, csp, -(16 * 3)
 
 	/* Save cra, cgp and current CompID in the callers' stack */
-	store_x cra, 0(csp)
-	store_x cgp, 1 * portWORD_SIZE(csp)
+	store_x cra, 1 * portWORD_SIZE(csp)
+	store_x cgp, 3 * portWORD_SIZE(csp)
 	getCurrentPerTCBCompartment t1
-	store_x ct1, 2 * portWORD_SIZE(csp)
+	store_x ct1, 0 * portWORD_SIZE(csp)
+
 
 	/* Load new dest compid, captable, and compartment function cap */
 	cllc ct0, .Lcompid
@@ -583,18 +616,17 @@ compartment_enter_code:
 
 	/* Beyond this point, we are now in a new compartment */
 
-        /* ------------------- */
+	/* ------------------- */
 
-        /* GO! */
+	/* GO! */
 	cjalr   cra, ct0
 
         /* ------------------- */
 
 	/* Compartment returned, retrieve caller's state */
-	load_x cra, 0(csp)
-	load_x cgp, 1 * portWORD_SIZE(csp)
-	load_x ct0, 2 * portWORD_SIZE(csp)
-	setCurrentPerTCBCompartment ct1, t0
+	load_x cra, 1 * portWORD_SIZE(csp)
+	load_x cgp, 3 * portWORD_SIZE(csp)
+	load_x ct0, 0 * portWORD_SIZE(csp)
 
 	cincoffset csp, csp, (16 * 3)
 
@@ -682,7 +714,7 @@ xPortCompartmentEnter:
 	store_x           csp, 0(ct3)
 
 	# Set the current compartment ID in mscratch
-	setCurrentPerTCBCompartment ca0, t2
+	setCurrentPerTCBCompartment ca0, t2, cnull
 
 	/* Load arguments for compartment */
 	clc               ca0, 0 * portWORD_SIZE(ct1)
@@ -796,7 +828,7 @@ xPortCompartmentReturn:
 	/* Beyond this point we count as outside the compartment */
 
 	load_x            ct0, 34 * portWORD_SIZE(csp)
-	setCurrentPerTCBCompartment ca0, t0
+	setCurrentPerTCBCompartment ca0, t0, cnull
 
 	load_x            ct0, 33 * portWORD_SIZE(csp)
 	cspecialw         ddc, ct0
@@ -857,7 +889,7 @@ xPortCompartmentTrapReturn:
 	csrw              mstatus, t0
 
 	load_x            ct0, 34 * portWORD_SIZE(csp)
-	setCurrentPerTCBCompartment ct1, t0
+	setCurrentPerTCBCompartment ct1, t0, cnull
 
 	load_x            c1, 1 * portWORD_SIZE(csp)
 	/* c2 is csp */
