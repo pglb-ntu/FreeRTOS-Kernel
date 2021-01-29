@@ -332,13 +332,12 @@ is_exception:
 	cmove             ca2, csp
 	clgc              ct0, vPortExceptionHandler
 	cjalr             cra, ct0
-	j                 processed_source
 #endif /* configPORT_ALLOW_APP_EXCEPTION_HANDLERS */
 
 .Ltest_if_in_compartment:
-	csrr              t0, mscratch
+	getCurrentPerTCBCompartment t0
 	li                t1, configCOMPARTMENTS_NUM - 1
-	bne               t0, t1, xPortCompartmentTrapReturn
+	bne               a0, t1, return_compartment
 
 .Lbreak_on_exception:
 	csrr              t0, mcause /* For viewing in the debugger only. */
@@ -400,6 +399,59 @@ processed_source:
 	load_x            c31, 31 * portWORD_SIZE(csp)
 
 	cincoffset        csp, csp, portCONTEXT_SIZE
+
+	mret
+
+return_compartment:
+	clgc              ct0, pxCurrentTCB # Load cap to pxCurrentTCB.
+	clc               ct0, 0(ct0) # Load pxCurrentTCB.
+	cspecialw         mscratchc, ct0
+
+	portasmRESTORE_ADDITIONAL_REGISTERS	/* Defined in freertos_risc_v_chip_specific_extensions.h to restore any registers unique to the RISC-V implementation. */
+
+	load_x            ct0, 0 * portWORD_SIZE(csp)
+	cspecialw         mepcc, ct0 # Write mepcc.
+
+	load_x            ct0, 33 * portWORD_SIZE(csp)
+	cspecialrw        cnull, ddc, ct0
+
+	/* Load mstatus with the interrupt enable bits used by the task. */
+	load_x            ct0, 32 * portWORD_SIZE(csp)
+	csrw              mstatus, t0 /* Required for MPIE bit. */
+
+	load_x            c1, 1 * portWORD_SIZE(csp)
+	load_x            c3, 3 * portWORD_SIZE(csp)
+	load_x            c4, 4 * portWORD_SIZE(csp)
+	load_x            c5, 5 * portWORD_SIZE(csp)
+	load_x            c6, 6 * portWORD_SIZE(csp)
+	load_x            c7, 7 * portWORD_SIZE(csp)
+	load_x            c8, 8 * portWORD_SIZE(csp)
+	load_x            c9, 9 * portWORD_SIZE(csp)
+	load_x            c10, 10 * portWORD_SIZE(csp)
+	load_x            c11, 11 * portWORD_SIZE(csp)
+	load_x            c12, 12 * portWORD_SIZE(csp)
+	load_x            c13, 13 * portWORD_SIZE(csp)
+	load_x            c14, 14 * portWORD_SIZE(csp)
+	load_x            c15, 15 * portWORD_SIZE(csp)
+	load_x            c16, 16 * portWORD_SIZE(csp)
+	load_x            c17, 17 * portWORD_SIZE(csp)
+	load_x            c18, 18 * portWORD_SIZE(csp)
+	load_x            c19, 19 * portWORD_SIZE(csp)
+	load_x            c20, 20 * portWORD_SIZE(csp)
+	load_x            c21, 21 * portWORD_SIZE(csp)
+	load_x            c22, 22 * portWORD_SIZE(csp)
+	load_x            c23, 23 * portWORD_SIZE(csp)
+	load_x            c24, 24 * portWORD_SIZE(csp)
+	load_x            c25, 25 * portWORD_SIZE(csp)
+	load_x            c26, 26 * portWORD_SIZE(csp)
+	load_x            c27, 27 * portWORD_SIZE(csp)
+	load_x            c28, 28 * portWORD_SIZE(csp)
+	load_x            c29, 29 * portWORD_SIZE(csp)
+	load_x            c30, 30 * portWORD_SIZE(csp)
+	load_x            c31, 31 * portWORD_SIZE(csp)
+
+	cincoffset        csp, csp, portCONTEXT_SIZE
+	getCurrentPerTCBCompartmentStack sp
 
 	mret
 .size freertos_risc_v_trap_handler, . - freertos_risc_v_trap_handler
@@ -565,6 +617,7 @@ xPortGetCurrentCompartmentID:
 	getCurrentPerTCBCompartment a0
 	cret
 .size xPortGetCurrentCompartmentID, . - xPortGetCurrentCompartmentID
+/*-----------------------------------------------------------*/
 
 /* uintcap_t xPortGetCurrentCompartmentStack( void ) PRIVILEGED_FUNCTION; */
 .align 8
