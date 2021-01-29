@@ -191,6 +191,12 @@ typedef struct {
     uintcap_t ca6;
     uintcap_t ca7;
 } xCOMPARTMENT_ARGS;
+
+typedef struct {
+    volatile uintcap_t    pxReturnCap;
+    volatile uintcap_t    pxReturnStack;
+    volatile UBaseType_t  xCompID;
+} xCOMPARTMENT_CONTEXT;
 #endif
 
 /*

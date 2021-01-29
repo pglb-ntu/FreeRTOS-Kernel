@@ -1171,7 +1171,7 @@ typedef struct xSTATIC_TCB
 {
     void * pxDummy1;
     #if ( portHAS_COMPARTMENT == 1 )
-        UBaseType_t xCompID;
+        xCOMPARTMENT_CONTEXT xCompartmnetContext;
     #endif
     #if ( portUSING_MPU_WRAPPERS == 1 )
         xMPU_SETTINGS xDummy2;
