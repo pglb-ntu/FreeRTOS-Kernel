@@ -214,7 +214,7 @@ void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHan
  * exception_frame is a pointer to the register context, including GPRs and
  * CSRs. It is passed to the user for further debugging.
  */
-void vPortExceptionHandler( UBaseType_t  ulExceptiontNumber, uintptr_t ulmepc, uintptr_t *exception_frame );
+UBaseType_t vPortExceptionHandler( UBaseType_t  ulExceptiontNumber, uintptr_t ulmepc, uintptr_t *exception_frame );
 
 #ifdef __cplusplus
 }

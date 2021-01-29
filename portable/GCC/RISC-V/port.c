@@ -103,13 +103,13 @@ interrupt stack after the scheduler has started. */
 		riscv_exceptions_table[ulExceptiontNumber] = pvHandler;
 	}
 
-	void vPortExceptionHandler( UBaseType_t  ulExceptiontNumber, uintptr_t ulmepc, uintptr_t *exception_frame )
+	UBaseType_t vPortExceptionHandler( UBaseType_t  ulExceptiontNumber, uintptr_t ulmepc, uintptr_t *exception_frame )
 	{
 		uint32_t (*handler)( void *pvParam ) =  (void *) riscv_exceptions_table[ulExceptiontNumber];
 
 		if( handler )
 		{
-			handler( exception_frame );
+			return handler( exception_frame );
 		}
 	}
 #endif
