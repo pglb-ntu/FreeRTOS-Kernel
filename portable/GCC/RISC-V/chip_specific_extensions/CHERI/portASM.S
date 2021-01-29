@@ -100,6 +100,7 @@ specific version of freertos_risc_v_chip_specific_extensions.h.  See the notes
 at the top of this file. */
 #ifdef __CHERI_PURE_CAPABILITY__
 #define portCONTEXT_SIZE (36 * portWORD_SIZE)
+#define portCOMPARTMENT_CONTEXT_SIZE (15 * portWORD_SIZE)
 #endif
 
 .global xPortStartFirstTask
@@ -626,6 +627,7 @@ xPortGetCurrentCompartmentStack:
 	getCurrentPerTCBCompartmentStack a0
 	cret
 .size xPortGetCurrentCompartmentStack, . - xPortGetCurrentCompartmentStack
+/*-----------------------------------------------------------*/
 
 /* uintcap_t xPortGetCurrentCompartmentReturn( void ) PRIVILEGED_FUNCTION; */
 .align 8
@@ -646,19 +648,34 @@ xPortCompartmentEnterTrampoline:
 
 compartment_enter_code:
 
-	cincoffset csp, csp, -(16 * 3)
+	cincoffset csp, csp, -(portCOMPARTMENT_CONTEXT_SIZE)
 
 	/* Save cra, cgp and current CompID in the callers' stack */
 	store_x cra, 1 * portWORD_SIZE(csp)
-	store_x cgp, 3 * portWORD_SIZE(csp)
+	store_x cgp, 2 * portWORD_SIZE(csp)
 	getCurrentPerTCBCompartment t1
 	store_x ct1, 0 * portWORD_SIZE(csp)
 
+	/* Save callee's context */
+	store_x cs0, 3 * portWORD_SIZE(csp)
+	store_x cs1, 4 * portWORD_SIZE(csp)
+	store_x cs2, 5 * portWORD_SIZE(csp)
+	store_x cs3, 6 * portWORD_SIZE(csp)
+	store_x cs4, 7 * portWORD_SIZE(csp)
+	store_x cs5, 8 * portWORD_SIZE(csp)
+	store_x cs6, 9 * portWORD_SIZE(csp)
+	store_x cs7, 10 * portWORD_SIZE(csp)
+	store_x cs8, 11 * portWORD_SIZE(csp)
+	store_x cs9, 12 * portWORD_SIZE(csp)
+	store_x cs10, 13 * portWORD_SIZE(csp)
+	store_x cs11, 14 * portWORD_SIZE(csp)
 
 	/* Load new dest compid, captable, and compartment function cap */
 	cllc ct0, .Lcompid
 	load_x ct0, 0(ct0)
-	setCurrentPerTCBCompartment ct1, t0
+
+	cllc ct2, compartment_return_code
+	setCurrentPerTCBCompartment ct1, t0, ct2
 
 	cllc   cgp, .Lcaptable
 	load_x cgp, 0(cgp)
@@ -674,14 +691,30 @@ compartment_enter_code:
 	/* GO! */
 	cjalr   cra, ct0
 
-        /* ------------------- */
+	/* ------------------- */
+compartment_return_code:
+
+	/* Restore caller's callee context */
+	load_x cs0, 3 * portWORD_SIZE(csp)
+	load_x cs1, 4 * portWORD_SIZE(csp)
+	load_x cs2, 5 * portWORD_SIZE(csp)
+	load_x cs3, 6 * portWORD_SIZE(csp)
+	load_x cs4, 7 * portWORD_SIZE(csp)
+	load_x cs5, 8 * portWORD_SIZE(csp)
+	load_x cs6, 9 * portWORD_SIZE(csp)
+	load_x cs7, 10 * portWORD_SIZE(csp)
+	load_x cs8, 11 * portWORD_SIZE(csp)
+	load_x cs9, 12 * portWORD_SIZE(csp)
+	load_x cs10, 13 * portWORD_SIZE(csp)
+	load_x cs11, 14 * portWORD_SIZE(csp)
 
 	/* Compartment returned, retrieve caller's state */
 	load_x cra, 1 * portWORD_SIZE(csp)
-	load_x cgp, 3 * portWORD_SIZE(csp)
+	load_x cgp, 2 * portWORD_SIZE(csp)
 	load_x ct0, 0 * portWORD_SIZE(csp)
 
-	cincoffset csp, csp, (16 * 3)
+	cincoffset csp, csp, (portCOMPARTMENT_CONTEXT_SIZE)
+	setCurrentPerTCBCompartment ct1, t0, cra
 
 	/* cret */
 	cret
