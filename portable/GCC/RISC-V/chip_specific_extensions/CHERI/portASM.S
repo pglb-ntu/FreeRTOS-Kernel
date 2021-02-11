@@ -323,7 +323,7 @@ test_if_environment_call:
 
 is_exception:
 	#csrr              t1, mccsr
-	#li                t0, (0x19  << 5) # CCall
+	#li                t0, (0x19  << 5) # cinvoke
 	#and               t1, t0, t1
 	#bne               t0, t1, 1f
 
@@ -866,7 +866,7 @@ xPortCompartmentEnter:
  * standard ABI. Its presence (provided the capability to it is sufficiently
  * unprivileged, ie has tight bounds and the same permissions as the callee)
  * does not provide additional privilege to the untrusted code since the callee
- * could just include the ccall in its own body.
+ * could just include the cinvoke in its own body.
  */
 .align 8
 .type xPortCompartmentReturnTrampoline, %function
@@ -875,7 +875,7 @@ xPortCompartmentReturnTrampoline:
 	/* cs1 - returnStack (sealed) */
 
 	/* (Hopefully) return from the compartment */
-	ccall             cs0, cs1
+	cinvoke           cs0, cs1
 .LxPortCompartmentReturnTrampolineEnd:
 .size xPortCompartmentReturnTrampoline, .LxPortCompartmentReturnTrampolineEnd - xPortCompartmentReturnTrampoline
 /*-----------------------------------------------------------*/
@@ -908,7 +908,7 @@ pxPortCompartmentGetReturnTrampoline:
 .align 8
 .type xPortCompartmentReturn, %function
 xPortCompartmentReturn:
-	/* ccall puts IDC in c31 */
+	/* cinvoke puts IDC in c31 */
 	cmove             csp, c31
 
 	/* Beyond this point we count as outside the compartment */
