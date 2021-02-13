@@ -34,6 +34,7 @@
 #endif
 
 /* Scheduler includes. */
+#include "FreeRTOSConfig.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "portmacro.h"
@@ -202,7 +203,7 @@ task stack, not the ISR stack). */
 /*-----------------------------------------------------------*/
 
 #ifdef __CHERI_PURE_CAPABILITY__
-	#if ( portHAS_COMPARTMENT == 1 )
+	#if ( configCHERI_COMPARTMENTALIZATION == 1 )
 	void ( * pxPortCompartmentReturnTrampoline ) ( void );
 	void ( * pxPortCompartmentReturnFunc ) ( BaseType_t xReturn );
 	BaseType_t *pxPortCompartmentReturnData;
@@ -269,7 +270,7 @@ extern void xPortStartFirstTask( void );
 	#endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIMECMP_BASE_ADDRESS != 0 ) */
 
 #ifdef __CHERI_PURE_CAPABILITY__
-    #if ( portHAS_COMPARTMENT == 1 )
+    #if ( configCHERI_COMPARTMENTALIZATION == 1 )
         vPortCompartmentSetup();
     #endif
 #endif

@@ -33,6 +33,8 @@
 extern "C" {
 #endif
 
+#include <FreeRTOSConfig.h>
+
 /*-----------------------------------------------------------
  * Port specific definitions.
  *
@@ -175,8 +177,6 @@ definition is found. */
 
 
 #ifdef __CHERI_PURE_CAPABILITY__
-#define portHAS_COMPARTMENT 1
-
 typedef struct {
     uintcap_t ca0;
 } xCOMPARTMENT_RET;

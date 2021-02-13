@@ -1054,10 +1054,10 @@
     #define configRUN_FREERTOS_SECURE_ONLY    0
 #endif
 
-/* Set portHAS_COMPARTMENT to 1 to run the FreeRTOS CHERI-RISC-V port with
+/* Set configCHERI_COMPARTMENTALIZATION to 1 to run the FreeRTOS CHERI-RISC-V port with
 compartmentalization support. */
-#ifndef portHAS_COMPARTMENT
-	#define portHAS_COMPARTMENT 0
+#ifndef configCHERI_COMPARTMENTALIZATION
+    #define configCHERI_COMPARTMENTALIZATION 0
 #endif
 
 /* Sometimes the FreeRTOSConfig.h settings only allow a task to be created using
@@ -1170,7 +1170,7 @@ typedef struct xSTATIC_LIST
 typedef struct xSTATIC_TCB
 {
     void * pxDummy1;
-    #if ( portHAS_COMPARTMENT == 1 )
+    #if ( configCHERI_COMPARTMENTALIZATION == 1 )
         xCOMPARTMENT_CONTEXT xCompartmnetContext;
     #endif
     #if ( portUSING_MPU_WRAPPERS == 1 )

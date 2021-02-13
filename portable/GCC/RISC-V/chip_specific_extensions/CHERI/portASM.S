@@ -611,6 +611,7 @@ pxPortInitialiseStackEnd:
 .size pxPortInitialiseStack, pxPortInitialiseStackEnd - pxPortInitialiseStack
 /*-----------------------------------------------------------*/
 
+#if configCHERI_COMPARTMENTALIZATION
 /* BaseType_t xPortGetCurrentCompartmentID( void ) PRIVILEGED_FUNCTION; */
 .align 8
 .type xPortGetCurrentCompartmentID, %function
@@ -1014,3 +1015,4 @@ xPortCompartmentTrapReturn:
 	cret
 .size xPortCompartmentTrapReturn, . - xPortCompartmentTrapReturn
 /*-----------------------------------------------------------*/
+#endif /* configCHERI_COMPARTMENTALIZATION */

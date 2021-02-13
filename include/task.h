@@ -3045,7 +3045,7 @@ TaskHandle_t pvTaskIncrementMutexHeldCount( void ) PRIVILEGED_FUNCTION;
 void vTaskInternalSetTimeOutState( TimeOut_t * const pxTimeOut ) PRIVILEGED_FUNCTION;
 
 
-#if ( portHAS_COMPARTMENT == 1 )
+#if ( configCHERI_COMPARTMENTALIZATION == 1 )
     xCOMPARTMENT_RET xTaskRunCompartment( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID ) PRIVILEGED_FUNCTION;
 #endif
 

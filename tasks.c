@@ -258,7 +258,7 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
 {
     volatile StackType_t * pxTopOfStack; /*< Points to the location of the last item placed on the tasks stack.  THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT. */
 
-    #if ( portHAS_COMPARTMENT == 1 )
+    #if ( configCHERI_COMPARTMENTALIZATION == 1 )
         xCOMPARTMENT_CONTEXT xCompartmentContext;
     #endif
 
@@ -849,12 +849,12 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
         uxPriority &= ~portPRIVILEGE_BIT;
     #endif /* portUSING_MPU_WRAPPERS == 1 */
 
-    #if ( portHAS_COMPARTMENT == 1 )
+    #if ( configCHERI_COMPARTMENTALIZATION == 1 )
         /* Tasks start with the kernel's compartment ID until a new
          * function within a new compartment is called/entered.
          */
         pxNewTCB->xCompartmentContext.xCompID = configCOMPARTMENTS_NUM - 1;
-    #endif /* portHAS_COMPARTMENT == 1 */
+    #endif /* configCHERI_COMPARTMENTALIZATION == 1 */
 
     /* Avoid dependency on memset() if it is not required. */
     #if ( tskSET_NEW_STACKS_TO_KNOWN_VALUE == 1 )
@@ -5413,7 +5413,7 @@ static void prvAddCurrentTaskToDelayedList( TickType_t xTicksToWait,
 
 #endif /* if ( configINCLUDE_FREERTOS_TASK_C_ADDITIONS_H == 1 ) */
 
-#if ( portHAS_COMPARTMENT == 1 )
+#if ( configCHERI_COMPARTMENTALIZATION == 1 )
     xCOMPARTMENT_RET xTaskRunCompartment( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID )
     {
         // TODO: We might want to allocate the stack here then free/zero it on return

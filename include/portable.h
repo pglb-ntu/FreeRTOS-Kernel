@@ -207,7 +207,7 @@ void vPortEndScheduler( void ) PRIVILEGED_FUNCTION;
                                     uint32_t ulStackDepth ) PRIVILEGED_FUNCTION;
 #endif
 
-#if ( portHAS_COMPARTMENT == 1 )
+#if ( configCHERI_COMPARTMENTALIZATION == 1 )
     BaseType_t xPortGetCurrentCompartmentID( void ) PRIVILEGED_FUNCTION;
     uintcap_t xPortGetCurrentCompartmentStack( void ) PRIVILEGED_FUNCTION;
     uintcap_t xPortGetCurrentCompartmentReturn( void ) PRIVILEGED_FUNCTION;
