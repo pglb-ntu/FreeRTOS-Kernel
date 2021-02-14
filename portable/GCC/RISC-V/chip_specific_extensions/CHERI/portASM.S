@@ -651,10 +651,19 @@ compartment_enter_code:
 
 	cincoffset csp, csp, -(portCOMPARTMENT_CONTEXT_SIZE)
 
-	/* Save cra, cgp and current CompID in the callers' stack */
+	/* Save cra in the callers' stack */
 	store_x cra, 1 * portWORD_SIZE(csp)
-	store_x cgp, 2 * portWORD_SIZE(csp)
+
+
+	/* Check if it is an inter-compartment call */
 	getCurrentPerTCBCompartment t1
+	cllc ct0, .Lcompid
+	load_x ct0, 0(ct0)
+	beq t0, t1, same_compartment_call
+
+compartment_switch:
+	/* Save cgp and old current compid into the caller's stack */
+	store_x cgp, 2 * portWORD_SIZE(csp)
 	store_x ct1, 0 * portWORD_SIZE(csp)
 
 	/* Save callee's context */
@@ -671,31 +680,30 @@ compartment_enter_code:
 	store_x cs10, 13 * portWORD_SIZE(csp)
 	store_x cs11, 14 * portWORD_SIZE(csp)
 
-	/* Load new dest compid, captable, and compartment function cap */
-	cllc ct0, .Lcompid
-	load_x ct0, 0(ct0)
-
-	cllc ct2, compartment_return_code
+	/* Set the new per-task compartment's csp and cra */
+	cllc ct2, compartment_return
 	setCurrentPerTCBCompartment ct1, t0, ct2
 
+	/* Set the new compartment's cgp */
 	cllc   cgp, .Lcaptable
 	load_x cgp, 0(cgp)
 	load_x cgp, 0(cgp)
-
-	cllc   ct0, .Lfunc
-	load_x ct0, 0(ct0)
 
 	/* Beyond this point, we are now in a new compartment */
 
 	/* ------------------- */
 
+compartment_call:
+	cllc   ct0, .Lfunc
+	load_x ct0, 0(ct0)
+
 	/* GO! */
 	cjalr   cra, ct0
 
 	/* ------------------- */
-compartment_return_code:
 
-	/* Restore caller's callee context */
+compartment_return:
+	/* Restore callee's context */
 	load_x cs0, 3 * portWORD_SIZE(csp)
 	load_x cs1, 4 * portWORD_SIZE(csp)
 	load_x cs2, 5 * portWORD_SIZE(csp)
@@ -710,12 +718,21 @@ compartment_return_code:
 	load_x cs11, 14 * portWORD_SIZE(csp)
 
 	/* Compartment returned, retrieve caller's state */
-	load_x cra, 1 * portWORD_SIZE(csp)
 	load_x cgp, 2 * portWORD_SIZE(csp)
 	load_x ct0, 0 * portWORD_SIZE(csp)
 
-	cincoffset csp, csp, (portCOMPARTMENT_CONTEXT_SIZE)
 	setCurrentPerTCBCompartment ct1, t0, cra
+        j compartment_load_return
+
+same_compartment_call:
+	cllc   ct0, .Lfunc
+	load_x ct0, 0(ct0)
+	/* GO! */
+	cjalr   cra, ct0
+
+compartment_load_return:
+	load_x cra, 1 * portWORD_SIZE(csp)
+	cincoffset csp, csp, (portCOMPARTMENT_CONTEXT_SIZE)
 
 	/* cret */
 	cret
