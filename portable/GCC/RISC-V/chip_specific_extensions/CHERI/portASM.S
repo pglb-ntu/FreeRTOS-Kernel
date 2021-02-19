@@ -335,10 +335,12 @@ is_exception:
 	cjalr             cra, ct0
 #endif /* configPORT_ALLOW_APP_EXCEPTION_HANDLERS */
 
+#if configCHERI_COMPARTMENTALIZATION
 .Ltest_if_in_compartment:
 	getCurrentPerTCBCompartment t0
 	li                t1, configCOMPARTMENTS_NUM - 1
 	bne               a0, t1, return_compartment
+#endif
 
 .Lbreak_on_exception:
 	csrr              t0, mcause /* For viewing in the debugger only. */
