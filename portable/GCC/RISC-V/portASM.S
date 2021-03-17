@@ -114,6 +114,10 @@ at the top of this file. */
 .extern xISRStackTop
 .extern portasmHANDLE_INTERRUPT
 
+#ifdef configTASK_RETURN_ADDRESS
+	.extern configTASK_RETURN_ADDRESS
+#endif /* configTASK_RETURN_ADDRESS */
+
 /*-----------------------------------------------------------*/
 
 .align 8
@@ -422,7 +426,12 @@ pxPortInitialiseStack:
 	addi a0, a0, -(22 * portWORD_SIZE)	/* Space for registers x11-x31. */
 	store_x a2, 0(a0)					/* Task parameters (pvParameters parameter) goes into register X10/a0 on the stack. */
 	addi a0, a0, -(6 * portWORD_SIZE)	/* Space for registers x5-x9. */
-	store_x x0, 0(a0)					/* Return address onto the stack, could be portTASK_RETURN_ADDRESS */
+	#ifdef configTASK_RETURN_ADDRESS
+		la     t0, configTASK_RETURN_ADDRESS /* Return address onto the stack */
+		store_x t0, 0(a0)
+	#else
+		store_x x0, 0(a0)				/* 0 Return address onto the stack (will fault if a task returns) */
+	#endif /* configTASK_RETURN_ADDRESS */
 	addi t0, x0, portasmADDITIONAL_CONTEXT_SIZE /* The number of chip specific additional registers. */
 chip_specific_stack_frame:				/* First add any chip specific registers to the stack frame being created. */
 	beq t0, x0, 1f						/* No more chip specific registers to save. */

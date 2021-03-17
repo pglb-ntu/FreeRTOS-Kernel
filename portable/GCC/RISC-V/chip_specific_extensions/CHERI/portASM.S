@@ -126,8 +126,12 @@ at the top of this file. */
 .extern xISRStackTop
 .extern portasmHANDLE_INTERRUPT
 
+#ifdef configTASK_RETURN_ADDRESS
+	.extern configTASK_RETURN_ADDRESS
+#endif /* configTASK_RETURN_ADDRESS */
+
 #if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
-.extern vPortExceptionHandler
+	.extern vPortExceptionHandler
 #endif
 /*-----------------------------------------------------------*/
 
@@ -589,7 +593,12 @@ xPortStartFirstTaskEnd:
 pxPortInitialiseStack:
 
 	cincoffset        ca0, ca0, -portCONTEXT_SIZE
-	store_x           cnull, 1 * portWORD_SIZE(ca0) # return address onto the stack, could be portTASK_RETURN_ADDRESS
+	#ifdef configTASK_RETURN_ADDRESS
+		clgc              ct0, configTASK_RETURN_ADDRESS # Return address onto the stack */
+		store_x           ct0, 1 * portWORD_SIZE(ca0)
+	#else
+		store_x           cnull, 1 * portWORD_SIZE(ca0) # null return address onto the stack (will fault if a task returns)
+	#endif /* configTASK_RETURN_ADDRESS */
 	store_x           ca2, 10 * portWORD_SIZE(ca0) # Task parameters (pvParameters parameter) go into register X10/a0 on the stack.
 1:
 	addi              t0, x0, 0x188 /* Generate the value 0x1880, which are the MPIE and MPP bits to set in mstatus. */
