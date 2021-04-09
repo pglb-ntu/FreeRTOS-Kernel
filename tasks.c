@@ -259,7 +259,7 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
     volatile StackType_t * pxTopOfStack; /*< Points to the location of the last item placed on the tasks stack.  THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT. */
 
     #if ( configCHERI_COMPARTMENTALIZATION == 1 )
-        xCOMPARTMENT_CONTEXT xCompartmentContext;
+        xCOMPARTMENT_CONTEXT* xCompartmentContext;
     #endif
 
     #if ( portUSING_MPU_WRAPPERS == 1 )
@@ -850,10 +850,13 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
     #endif /* portUSING_MPU_WRAPPERS == 1 */
 
     #if ( configCHERI_COMPARTMENTALIZATION == 1 )
+        /* Allocate compartment context stack */
+        pxNewTCB->xCompartmentContext = pvPortMalloc( configCOMPARTMENTS_NUM * sizeof( xCOMPARTMENT_CONTEXT ) );
+
         /* Tasks start with the kernel's compartment ID until a new
          * function within a new compartment is called/entered.
          */
-        pxNewTCB->xCompartmentContext.xCompID = configCOMPARTMENTS_NUM - 1;
+        pxNewTCB->xCompartmentContext->xCompID = configCOMPARTMENTS_NUM - 1;
     #endif /* configCHERI_COMPARTMENTALIZATION == 1 */
 
     /* Avoid dependency on memset() if it is not required. */

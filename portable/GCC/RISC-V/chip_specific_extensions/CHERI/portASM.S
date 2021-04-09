@@ -137,27 +137,45 @@ at the top of this file. */
 
 .macro getCurrentPerTCBCompartment reg_return
 	cspecialr         c\reg_return, mscratchc
-	clw               \reg_return, 3 * portWORD_SIZE(c\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
+	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return)
+	clw               \reg_return, 2 * portWORD_SIZE(c\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
 .endm
 /*-----------------------------------------------------------*/
 
 .macro getCurrentPerTCBCompartmentStack reg_return
 	cspecialr         c\reg_return, mscratchc
-	load_x            c\reg_return, 2 * portWORD_SIZE(c\reg_return) # Read return stack from second xCOMPARTMENT_CONTEXT.
+	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return)
+	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return) # Read return stack from second xCOMPARTMENT_CONTEXT.
 .endm
 /*-----------------------------------------------------------*/
 
 .macro getCurrentPerTCBCompartmentReturn reg_return
 	cspecialr         c\reg_return, mscratchc
-	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return) # Read return cap from xCOMPARTMENT_CONTEXT.
+	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return)
+	load_x            c\reg_return, 0 * portWORD_SIZE(c\reg_return) # Read return cap from xCOMPARTMENT_CONTEXT.
 .endm
 /*-----------------------------------------------------------*/
 
 .macro setCurrentPerTCBCompartment reg_temp, compid, ret_cap
 	cspecialr         \reg_temp, mscratchc
-	store_x           \ret_cap, 1 * portWORD_SIZE(\reg_temp)
-	store_x           csp, 2 * portWORD_SIZE(\reg_temp)
-	csw               \compid, 3 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp)
+	store_x           \ret_cap, 3 * portWORD_SIZE(\reg_temp)
+	store_x           csp, 4 * portWORD_SIZE(\reg_temp)
+	csw               \compid, 5 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+
+	# Increase compartment stack level and store it to point to the current compartment context
+	cincoffset        \reg_temp, \reg_temp, 3 * portWORD_SIZE
+	cspecialr         \ret_cap, mscratchc
+	store_x           \reg_temp, 1 * portWORD_SIZE(\ret_cap)
+.endm
+/*-----------------------------------------------------------*/
+
+.macro unWindPerTCBCompartment reg_temp, reg_temp2
+	# Decrease compartment stack level and store it to point to the caller's compartment context
+	cspecialr         \reg_temp2, mscratchc
+	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+	cincoffset        \reg_temp, \reg_temp, -(3 * portWORD_SIZE)
+	store_x           \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
 .endm
 /*-----------------------------------------------------------*/
 
@@ -732,8 +750,8 @@ compartment_return:
 	load_x cgp, 2 * portWORD_SIZE(csp)
 	load_x ct0, 0 * portWORD_SIZE(csp)
 
-	setCurrentPerTCBCompartment ct1, t0, cra
-        j compartment_load_return
+	unWindPerTCBCompartment ct0, ct1
+	j compartment_load_return
 
 same_compartment_call:
 	cllc   ct0, .Lfunc
