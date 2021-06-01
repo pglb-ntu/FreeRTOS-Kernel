@@ -101,10 +101,25 @@
 #define EVENT_28                        EVENT_TAGCACHE_STORE_MISS
 #define EVENT_29                        EVENT_TAGCACHE_EVICT
 
-#define RISCV_READ_CSR( reg )                                \
-    ( { unsigned long __tmp;                                 \
-        asm volatile ( "csrr %0, " # reg : "=r" ( __tmp ) ); \
-        __tmp; } )
+#if __riscv_xlen == 64
+    #define RISCV_READ_CSR( reg )                                \
+        ( { uint64_t __tmp;                                      \
+            asm volatile ( "csrr %0, " # reg : "=r" ( __tmp ) ); \
+            __tmp; } )
+#else
+    #define RISCV_READ_CSR( reg )                                \
+        ( { unsigned long __tmpl, __tmph;                        \
+            asm volatile (                                       \
+                "%=:\n\t"                                        \
+                "csrr %1, " # reg "h\n\t"                        \
+                "csrr %0, " # reg "\n\t"                         \
+                "csrr t1, " # reg "h\n\t"                        \
+                "bne  %1, t1, %=b"                               \
+                : "=r" ( __tmpl ), "=r" ( __tmph )               \
+                : /* No inputs. */                               \
+                : "t1" );                                        \
+            ( uint64_t ) (( ( ( uint64_t ) __tmph ) << 32 ) | ( uint64_t ) __tmpl ); } )
+#endif /* if __riscv_xlen == 64 */
 
 typedef uint64_t PortCounter_t;
 
@@ -238,12 +253,12 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
     switch( counterID )
     {
         case COUNTER_CYCLE:
-            return RISCV_READ_CSR( cycle );
+            return RISCV_READ_CSR( mcycle );
 
             break;
 
         case COUNTER_INSTRET:
-            return RISCV_READ_CSR( instret );
+            return RISCV_READ_CSR( minstret );
 
             break;
 
