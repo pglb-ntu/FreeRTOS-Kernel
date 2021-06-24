@@ -290,11 +290,20 @@ handle_asynchronous:
 		clc             csp, 0(ct0)
 
 		clgc            ct0, xTaskIncrementTick
+
+#ifdef __riscv_xcheri_mode_dependent_jumps
+		jalr.cap        cra, ct0
+#else
 		cjalr           cra, ct0
+#endif
 
 		beqz            a0, 1f /* Don't switch context if incrementing tick didn't unblock a task. */
 		clgc            ct0, vTaskSwitchContext
+#ifdef __riscv_xcheri_mode_dependent_jumps
+		jalr.cap        cra, ct0
+#else
 		cjalr           cra, ct0
+#endif
 
 1:
 		clgc            ct1, pxCurrentTCB # Load cap to pxCurrentTCB.
@@ -311,11 +320,19 @@ handle_asynchronous:
 	clgc              ct0, xISRStackTop # Switch to ISR stack before function call.
 	clc               csp, 0(ct0)
 	clgc              ct0, portasmHANDLE_INTERRUPT
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap          cra, ct0 # Jump to the interrupt handler if there is no CLINT or if there is a CLINT and it has been determined that an external interrupt is pending.
+#else
 	cjalr             cra, ct0 # Jump to the interrupt handler if there is no CLINT or if there is a CLINT and it has been determined that an external interrupt is pending.
+#endif
 
 	beqz              a0, 1f /* Don't switch context if external interrupt didn't unblock a task. */
 	clgc              ct0, vTaskSwitchContext
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap          cra, ct0
+#else
 	cjalr             cra, ct0
+#endif
 
 1:
 	clgc              ct1, pxCurrentTCB # Load cap to pxCurrentTCB.
@@ -335,7 +352,11 @@ test_if_environment_call:
 	clc               csp, 0(ct0)
 
 	clgc              ct0, vTaskSwitchContext
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap          cra, ct0
+#else
 	cjalr             cra, ct0
+#endif
 
 	clgc              ct1, pxCurrentTCB # Load cap to pxCurrentTCB.
 	clc               ct1, 0(ct1) # Load pxCurrentTCB.
@@ -354,7 +375,11 @@ is_exception:
 	 * put exception frame in a2 as a third argument to vPortExceptionHandler. */
 	cmove             ca2, csp
 	clgc              ct0, vPortExceptionHandler
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap          cra, ct0
+#else
 	cjalr             cra, ct0
+#endif
 #endif /* configPORT_ALLOW_APP_EXCEPTION_HANDLERS */
 
 #if configCHERI_COMPARTMENTALIZATION
@@ -727,7 +752,11 @@ compartment_call:
 	load_x ct0, 0(ct0)
 
 	/* GO! */
-	cjalr   cra, ct0
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap  cra, ct1
+#else
+	cjalr     cra, ct1
+#endif
 
 	/* ------------------- */
 
@@ -757,7 +786,11 @@ same_compartment_call:
 	cllc   ct0, .Lfunc
 	load_x ct0, 0(ct0)
 	/* GO! */
-	cjalr   cra, ct0
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap  cra, ct0
+#else
+	cjalr     cra, ct0
+#endif
 
 compartment_load_return:
 	load_x cra, 1 * portWORD_SIZE(csp)
@@ -840,7 +873,11 @@ xPortCompartmentEnter:
 	cmove             ca0, csp
 	li                a1, configCOMPARTMENTS_NUM - 1
 	clgc              ct3, cheri_seal_cap
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jalr.cap          cra, ct3
+#else
 	cjalr             cra, ct3
+#endif
 	cmove             cs1, ca0
 
 	clgc              ct3, pxPortCompartmentReturnData
