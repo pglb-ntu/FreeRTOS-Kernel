@@ -714,8 +714,8 @@ compartment_enter_code:
 	/* Check if it is an inter-compartment call */
 	getCurrentPerTCBCompartment t1
 	cllc ct0, .Lcompid
-	load_x ct0, 0(ct0)
-	beq t0, t1, same_compartment_call
+	clw  t0, 0(ct0)
+	beq  t0, t1, same_compartment_call
 
 compartment_switch:
 	/* Save cgp and old current compid into the caller's stack */
