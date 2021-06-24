@@ -750,8 +750,8 @@ compartment_switch:
 	/* ------------------- */
 
 compartment_call:
-	cllc   ct0, .Lfunc
-	load_x ct0, 0(ct0)
+	cllc   ct1, .Lfunc
+	load_x ct1, 0(ct1)
 
 	/* GO! */
 #ifdef __riscv_xcheri_mode_dependent_jumps
@@ -784,13 +784,13 @@ compartment_return:
 	j compartment_load_return
 
 same_compartment_call:
-	cllc   ct0, .Lfunc
-	load_x ct0, 0(ct0)
+	cllc   ct1, .Lfunc
+	load_x ct1, 0(ct1)
 	/* GO! */
 #ifdef __riscv_xcheri_mode_dependent_jumps
-	jalr.cap  cra, ct0
+	jalr.cap  cra, ct1
 #else
-	cjalr     cra, ct0
+	cjalr     cra, ct1
 #endif
 
 compartment_load_return:
