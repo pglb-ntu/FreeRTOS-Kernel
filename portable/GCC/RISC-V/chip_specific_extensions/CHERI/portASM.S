@@ -706,8 +706,10 @@ compartment_enter_code:
 	cincoffset csp, csp, -(portCOMPARTMENT_CONTEXT_SIZE)
 
 	/* Save cra in the callers' stack */
-	store_x cra, 1 * portWORD_SIZE(csp)
+	store_x cra, 14 * portWORD_SIZE(csp)
+	store_x cs0, 13 * portWORD_SIZE(csp)
 
+	cincoffset cs0, csp, portCOMPARTMENT_CONTEXT_SIZE
 
 	/* Check if it is an inter-compartment call */
 	getCurrentPerTCBCompartment t1
@@ -721,7 +723,6 @@ compartment_switch:
 	store_x ct1, 0 * portWORD_SIZE(csp)
 
 	/* Save callee's context */
-	store_x cs0, 3 * portWORD_SIZE(csp)
 	store_x cs1, 4 * portWORD_SIZE(csp)
 	store_x cs2, 5 * portWORD_SIZE(csp)
 	store_x cs3, 6 * portWORD_SIZE(csp)
@@ -731,8 +732,9 @@ compartment_switch:
 	store_x cs7, 10 * portWORD_SIZE(csp)
 	store_x cs8, 11 * portWORD_SIZE(csp)
 	store_x cs9, 12 * portWORD_SIZE(csp)
-	store_x cs10, 13 * portWORD_SIZE(csp)
-	store_x cs11, 14 * portWORD_SIZE(csp)
+
+	store_x cs10, 1 * portWORD_SIZE(csp)
+	store_x cs11, 3 * portWORD_SIZE(csp)
 
 	/* Set the new per-task compartment's csp and cra */
 	cllc ct2, compartment_return
@@ -762,7 +764,7 @@ compartment_call:
 
 compartment_return:
 	/* Restore callee's context */
-	load_x cs0, 3 * portWORD_SIZE(csp)
+	load_x cs11, 3 * portWORD_SIZE(csp)
 	load_x cs1, 4 * portWORD_SIZE(csp)
 	load_x cs2, 5 * portWORD_SIZE(csp)
 	load_x cs3, 6 * portWORD_SIZE(csp)
@@ -772,8 +774,7 @@ compartment_return:
 	load_x cs7, 10 * portWORD_SIZE(csp)
 	load_x cs8, 11 * portWORD_SIZE(csp)
 	load_x cs9, 12 * portWORD_SIZE(csp)
-	load_x cs10, 13 * portWORD_SIZE(csp)
-	load_x cs11, 14 * portWORD_SIZE(csp)
+	load_x cs10, 1 * portWORD_SIZE(csp)
 
 	/* Compartment returned, retrieve caller's state */
 	load_x cgp, 2 * portWORD_SIZE(csp)
@@ -793,7 +794,8 @@ same_compartment_call:
 #endif
 
 compartment_load_return:
-	load_x cra, 1 * portWORD_SIZE(csp)
+	load_x cs0, 13 * portWORD_SIZE(csp)
+	load_x cra, 14 * portWORD_SIZE(csp)
 	cincoffset csp, csp, (portCOMPARTMENT_CONTEXT_SIZE)
 
 	/* cret */
