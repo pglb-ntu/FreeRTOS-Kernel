@@ -138,7 +138,11 @@ at the top of this file. */
 .macro getCurrentPerTCBCompartment reg_return
 	cspecialr         c\reg_return, mscratchc
 	load_x            c\reg_return, 1 * portWORD_SIZE(c\reg_return)
+#if __riscv_xlen == 64
+	cld               \reg_return, 2 * portWORD_SIZE(c\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
+#else
 	clw               \reg_return, 2 * portWORD_SIZE(c\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
+#endif
 .endm
 /*-----------------------------------------------------------*/
 
@@ -161,7 +165,11 @@ at the top of this file. */
 	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp)
 	store_x           \ret_cap, 3 * portWORD_SIZE(\reg_temp)
 	store_x           csp, 4 * portWORD_SIZE(\reg_temp)
+#if __riscv_xlen == 64
+	csd               \compid, 5 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+#else
 	csw               \compid, 5 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+#endif
 
 	# Increase compartment stack level and store it to point to the current compartment context
 	cincoffset        \reg_temp, \reg_temp, 3 * portWORD_SIZE
@@ -380,6 +388,18 @@ is_exception:
 #else
 	cjalr             cra, ct0
 #endif
+		beqz            a0, .Ltest_if_in_compartment /* Don't switch context if fault handler didn't block/unblock a task. */
+		clgc            ct0, vTaskSwitchContext
+#ifdef __riscv_xcheri_mode_dependent_jumps
+		jalr.cap        cra, ct0
+#else
+		cjalr           cra, ct0
+#endif
+
+		clgc            ct1, pxCurrentTCB # Load cap to pxCurrentTCB.
+		clc             ct1, 0(ct1) # Load pxCurrentTCB.
+		load_x          csp, 0(ct1) # Read sp from first TCB member.
+		beq             zero, zero, processed_source
 #endif /* configPORT_ALLOW_APP_EXCEPTION_HANDLERS */
 
 #if configCHERI_COMPARTMENTALIZATION
@@ -714,7 +734,11 @@ compartment_enter_code:
 	/* Check if it is an inter-compartment call */
 	getCurrentPerTCBCompartment t1
 	cllc ct0, .Lcompid
+#if __riscv_xlen == 64
+	cld  t0, 0(ct0)
+#else
 	clw  t0, 0(ct0)
+#endif
 	beq  t0, t1, same_compartment_call
 
 compartment_switch:
