@@ -43,6 +43,10 @@
 #include "timers.h"
 #include "stack_macros.h"
 
+#if ( configCHERI_COMPARTMENTALIZATION == 1 )
+    #include <rtl/rtl-freertos-compartments.h>
+#endif
+
 /* Lint e9021, e961 and e750 are suppressed as a MISRA exception justified
  * because the MPU ports require MPU_WRAPPERS_INCLUDED_FROM_API_FILE to be defined
  * for the header files above, but not in this file, in order to generate the
@@ -1079,6 +1083,19 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
         /* Pass the handle out in an anonymous way.  The handle can be used to
          * change the created task's priority, delete the created task, etc.*/
         *pxCreatedTask = ( TaskHandle_t ) pxNewTCB;
+
+        #if ( configCHERI_COMPARTMENTALIZATION == 1 )
+            /* Check if we are creating a task from a compartment, in which case it owns it */
+            BaseType_t xcompID = configCOMPARTMENTS_NUM - 1;
+
+            if ( pxCurrentTCB != NULL )
+                xcompID = pxCurrentTCB->xCompartmentContext->xCompID;
+
+            if ( xcompID != configCOMPARTMENTS_NUM - 1 ) {
+                FreeRTOSResource_t xResource = {.handle = pxNewTCB, .type = FREERTOS_TASK};
+                rtl_cherifreertos_compartment_add_resource(xcompID, xResource);
+            }
+        #endif
     }
     else
     {
@@ -1245,6 +1262,20 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB )
                 prvResetNextTaskUnblockTime();
             }
         }
+
+        #if ( configCHERI_COMPARTMENTALIZATION == 1 )
+            /* Check if we are deleting a task from a compartment, in which case it owns it */
+            BaseType_t xcompID = configCOMPARTMENTS_NUM - 1;
+
+            if ( pxCurrentTCB != NULL )
+                xcompID = pxCurrentTCB->xCompartmentContext->xCompID;
+
+            if ( xcompID != configCOMPARTMENTS_NUM - 1 ) {
+                FreeRTOSResource_t xResource = {.handle = pxTCB, .type = FREERTOS_TASK};
+                rtl_cherifreertos_compartment_remove_resource(xcompID, xResource);
+            }
+        #endif
+
         taskEXIT_CRITICAL();
 
         /* Force a reschedule if it is the currently running task that has just
