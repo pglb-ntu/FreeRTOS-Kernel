@@ -223,6 +223,9 @@ freertos_risc_v_trap_handler:
 	store_x           c30, 30 * portWORD_SIZE(csp)
 	store_x           c31, 31 * portWORD_SIZE(csp)
 
+	cincoffset        ct0, csp, portCONTEXT_SIZE
+	store_x           ct0, 2 * portWORD_SIZE(csp)
+
 	csrr              t0, mstatus # Required for MPIE bit.
 	store_x           ct0, 32 * portWORD_SIZE(csp)
 
