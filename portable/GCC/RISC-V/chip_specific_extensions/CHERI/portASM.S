@@ -764,8 +764,7 @@ compartment_switch:
 	store_x cs11, 3 * portWORD_SIZE(csp)
 
 	/* Enter a critical section setting the new compartment context */
-	csrr  t1, mstatus
-	csrc  mstatus, 8 // Disable interrupts
+	csrrc t3, mstatus, 8 // Disable interrupts
 	/* Set the new compartment's cgp */
 	cllc   cgp, .Lcaptable
 	load_x cgp, 0(cgp)
@@ -774,7 +773,7 @@ compartment_switch:
 	/* Set the new per-task compartment's csp and cra */
 	cllc ct2, compartment_return
 	setCurrentPerTCBCompartment ct1, t0, ct2
-	csrw  mstatus, t1 // Retrieve previous mstatus pre-critical section
+	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
 	/* Exit critical section */
 
 	/* Beyond this point, we are now in a new compartment */
@@ -810,13 +809,12 @@ compartment_return:
 
 	/* Compartment returned, retrieve caller's state */
 	/* Enter a critical section setting the old compartment context */
-	csrr  t1, mstatus
-	csrc  mstatus, 8 // Disable interrupts
+	csrrc t3, mstatus, 8 // Disable interrupts
 	load_x cgp, 2 * portWORD_SIZE(csp)
 	load_x ct0, 0 * portWORD_SIZE(csp)
 
 	unWindPerTCBCompartment ct0, ct1
-	csrw  mstatus, t1 // Retrieve previous mstatus pre-critical section
+	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
 	/* Exit critical section */
 
 	j compartment_load_return
