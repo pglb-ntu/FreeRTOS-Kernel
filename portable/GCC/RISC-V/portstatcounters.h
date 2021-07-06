@@ -164,6 +164,44 @@ typedef enum
     COUNTERS_NUM
 } PortCounterID_t;
 
+static const char* hpm_names[] =
+{
+    "CYCLE",
+    "INSTRET",
+    "",
+    "REDIRECT",
+    "BRANCH",
+    "JAL",
+    "JALR",
+    "TRAP",
+
+    "LOAD_WAIT",
+    "CAP_LOAD",
+    "CAP_STORE",
+
+    "ITLB_MISS",
+    "ICACHE_LOAD",
+    "ICACHE_LOAD_MISS",
+    "ICACHE_LOAD_MISS_WAIT",
+
+    "DTLB_ACCESS",
+    "DTLB_MISS",
+    "DTLB_MISS_WAIT",
+    "DCACHE_LOAD",
+    "DCACHE_LOAD_MISS",
+    "DCACHE_LOAD_MISS_WAIT",
+    "DCACHE_STORE",
+    "DCACHE_STORE_MISS",
+
+    "LLCACHE_FILL",
+    "LLCACHE_LLCACHE_FILL_WAIT",
+
+    "TAGCACHE_LOAD",
+    "TAGCACHE_LOAD_MISS",
+    "TAGCACHE_LLCACHE_EVICT",
+    "TAGCACHE_STORE_MISS",
+    "TAGCACHE_EVICT"
+};
 
 static inline void portCountersInit( void )
 {
@@ -250,6 +288,10 @@ static inline void portCountersInit( void )
         #endif
         );
 }
+
+typedef struct hpms {
+  PortCounter_t counters[COUNTERS_NUM];
+} cheri_riscv_hpms;
 
 static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
 {
@@ -403,6 +445,50 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
         default:
             return 0;
     }
+}
+
+static void PortStatCounters_ReadAll(cheri_riscv_hpms* hpms) {
+  hpms->counters[COUNTER_CYCLE] = RISCV_READ_CSR( mcycle );
+  hpms->counters[COUNTER_INSTRET] = RISCV_READ_CSR( minstret );
+  hpms->counters[COUNTER_REDIRECT] = RISCV_READ_CSR( mhpmcounter3 );
+  hpms->counters[COUNTER_BRANCH] = RISCV_READ_CSR( mhpmcounter4 );
+  hpms->counters[COUNTER_JAL] = RISCV_READ_CSR( mhpmcounter5 );
+  hpms->counters[COUNTER_JALR] = RISCV_READ_CSR( mhpmcounter6 );
+  hpms->counters[COUNTER_TRAP] = RISCV_READ_CSR( mhpmcounter7 );
+  hpms->counters[COUNTER_LOAD_WAIT] = RISCV_READ_CSR( mhpmcounter8 );
+  hpms->counters[COUNTER_CAP_LOAD] = RISCV_READ_CSR( mhpmcounter9 );
+  hpms->counters[COUNTER_CAP_STORE] = RISCV_READ_CSR( mhpmcounter10 );
+  hpms->counters[COUNTER_ITLB_MISS] = RISCV_READ_CSR( mhpmcounter11 );
+  hpms->counters[COUNTER_ICACHE_LOAD] = RISCV_READ_CSR( mhpmcounter12 );
+  hpms->counters[COUNTER_ICACHE_LOAD_MISS] = RISCV_READ_CSR( mhpmcounter13 );
+  hpms->counters[COUNTER_ICACHE_LOAD_MISS_WAIT] = RISCV_READ_CSR( mhpmcounter14 );
+  hpms->counters[COUNTER_DTLB_ACCESS] = RISCV_READ_CSR( mhpmcounter15 );
+  hpms->counters[COUNTER_DTLB_MISS] = RISCV_READ_CSR( mhpmcounter16 );
+  hpms->counters[COUNTER_DTLB_MISS_WAIT] = RISCV_READ_CSR( mhpmcounter17 );
+  hpms->counters[COUNTER_DCACHE_LOAD] = RISCV_READ_CSR( mhpmcounter18 );
+  hpms->counters[COUNTER_DCACHE_LOAD_MISS] = RISCV_READ_CSR( mhpmcounter19 );
+  hpms->counters[COUNTER_DCACHE_LOAD_MISS_WAIT] = RISCV_READ_CSR( mhpmcounter20 );
+  hpms->counters[COUNTER_DCACHE_STORE] = RISCV_READ_CSR( mhpmcounter21 );
+  hpms->counters[COUNTER_DCACHE_STORE_MISS] = RISCV_READ_CSR( mhpmcounter22 );
+  hpms->counters[COUNTER_LLCACHE_FILL] = RISCV_READ_CSR( mhpmcounter23 );
+  hpms->counters[COUNTER_LLCACHE_FILL_WAIT] = RISCV_READ_CSR( mhpmcounter24 );
+  hpms->counters[COUNTER_TAGCACHE_LOAD] = RISCV_READ_CSR( mhpmcounter25 );
+  hpms->counters[COUNTER_TAGCACHE_LOAD_MISS] = RISCV_READ_CSR( mhpmcounter26 );
+  hpms->counters[COUNTER_LLCACHE_EVICT] = RISCV_READ_CSR( mhpmcounter27 );
+  hpms->counters[COUNTER_TAGCACHE_STORE_MISS] = RISCV_READ_CSR( mhpmcounter28 );
+  hpms->counters[COUNTER_TAGCACHE_EVICT] = RISCV_READ_CSR( mhpmcounter29 );
+}
+
+static void PortStatCounters_DiffAll(cheri_riscv_hpms* start_hpms, cheri_riscv_hpms* end_hpms, cheri_riscv_hpms* diff_hpms) {
+  for (int i = 0; i < COUNTERS_NUM; i++) {
+    diff_hpms->counters[i] = end_hpms->counters[i] - start_hpms->counters[i];
+  }
+}
+
+static void PortStatCounters_PrintAll(cheri_riscv_hpms* hpms) {
+  for (int i = 0; i < COUNTERS_NUM; i++) {
+    printf("HPM %s: %llu\n", hpm_names[i], (long long unsigned) hpms->counters[i]);
+  }
 }
 
 #endif /* _PORT_HPM_COUNTERS */
