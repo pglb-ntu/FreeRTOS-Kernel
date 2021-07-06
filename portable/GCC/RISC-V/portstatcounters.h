@@ -46,10 +46,10 @@
 #define EVENT_TRAP                      0x2
 
 #define EVENT_LOAD_WAIT                 0x10
-#define EVENT_CAP_LOAD_TAG_SET          0x1c
-#define EVENT_CAP_STORE_TAG_SET         0x1d
+#define EVENT_CAP_LOAD                  0x1a
+#define EVENT_CAP_STORE                 0x1b
 
-#define EVENT_ITLB_MISS_WAIT            0x2b
+#define EVENT_ITLB_MISS                 0x2a
 #define EVENT_ICACHE_LOAD               0x20
 #define EVENT_ICACHE_LOAD_MISS          0x21
 #define EVENT_ICACHE_LOAD_MISS_WAIT     0x22
@@ -80,9 +80,9 @@
 #define EVENT_6                         EVENT_JALR
 #define EVENT_7                         EVENT_TRAP
 #define EVENT_8                         EVENT_LOAD_WAIT
-#define EVENT_9                         EVENT_CAP_LOAD_TAG_SET
-#define EVENT_10                        EVENT_CAP_STORE_TAG_SET
-#define EVENT_11                        EVENT_ITLB_MISS_WAIT
+#define EVENT_9                         EVENT_CAP_LOAD
+#define EVENT_10                        EVENT_CAP_STORE
+#define EVENT_11                        EVENT_ITLB_MISS
 #define EVENT_12                        EVENT_ICACHE_LOAD
 #define EVENT_13                        EVENT_ICACHE_LOAD_MISS
 #define EVENT_14                        EVENT_ICACHE_LOAD_MISS_WAIT
@@ -94,11 +94,11 @@
 #define EVENT_20                        EVENT_DCACHE_LOAD_MISS_WAIT
 #define EVENT_21                        EVENT_DCACHE_STORE
 #define EVENT_22                        EVENT_DCACHE_STORE_MISS
-#define EVENT_23                        EVENT_LLCACHE_LOAD_MISS
-#define EVENT_24                        EVENT_LLCACHE_LOAD_MISS_WAIT
+#define EVENT_23                        EVENT_LLCACHE_FILL
+#define EVENT_24                        EVENT_LLCACHE_FILL_WAIT
 #define EVENT_25                        EVENT_TAGCACHE_LOAD
 #define EVENT_26                        EVENT_TAGCACHE_LOAD_MISS
-#define EVENT_27                        EVENT_TAGCACHE_STORE
+#define EVENT_27                        EVENT_LLCACHE_EVICT
 #define EVENT_28                        EVENT_TAGCACHE_STORE_MISS
 #define EVENT_29                        EVENT_TAGCACHE_EVICT
 
@@ -135,10 +135,10 @@ typedef enum
     COUNTER_TRAP = 7,
 
     COUNTER_LOAD_WAIT = 8,
-    COUNTER_CAP_LOAD_TAG_SET = 9,
-    COUNTER_CAP_STORE_TAG_SET = 10,
+    COUNTER_CAP_LOAD = 9,
+    COUNTER_CAP_STORE = 10,
 
-    COUNTER_ITLB_MISS_WAIT = 11,
+    COUNTER_ITLB_MISS = 11,
     COUNTER_ICACHE_LOAD = 12,
     COUNTER_ICACHE_LOAD_MISS = 13,
     COUNTER_ICACHE_LOAD_MISS_WAIT = 14,
@@ -152,14 +152,16 @@ typedef enum
     COUNTER_DCACHE_STORE = 21,
     COUNTER_DCACHE_STORE_MISS = 22,
 
-    COUNTER_LLCACHE_LOAD_MISS = 23,
-    COUNTER_LLCACHE_LOAD_MISS_WAIT = 24,
+    COUNTER_LLCACHE_FILL = 23,
+    COUNTER_LLCACHE_FILL_WAIT = 24,
 
     COUNTER_TAGCACHE_LOAD = 25,
     COUNTER_TAGCACHE_LOAD_MISS = 26,
-    COUNTER_TAGCACHE_STORE = 27,
+    COUNTER_LLCACHE_EVICT = 27,
     COUNTER_TAGCACHE_STORE_MISS = 28,
-    COUNTER_TAGCACHE_EVICT = 29
+    COUNTER_TAGCACHE_EVICT = 29,
+
+    COUNTERS_NUM
 } PortCounterID_t;
 
 
@@ -293,17 +295,17 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
 
             break;
 
-        case COUNTER_CAP_LOAD_TAG_SET:
+        case COUNTER_CAP_LOAD:
             return RISCV_READ_CSR( mhpmcounter9 );
 
             break;
 
-        case COUNTER_CAP_STORE_TAG_SET:
+        case COUNTER_CAP_STORE:
             return RISCV_READ_CSR( mhpmcounter10 );
 
             break;
 
-        case COUNTER_ITLB_MISS_WAIT:
+        case COUNTER_ITLB_MISS:
             return RISCV_READ_CSR( mhpmcounter11 );
 
             break;
@@ -363,12 +365,12 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
 
             break;
 
-        case COUNTER_LLCACHE_LOAD_MISS:
+        case COUNTER_LLCACHE_FILL:
             return RISCV_READ_CSR( mhpmcounter23 );
 
             break;
 
-        case COUNTER_LLCACHE_LOAD_MISS_WAIT:
+        case COUNTER_LLCACHE_FILL_WAIT:
             return RISCV_READ_CSR( mhpmcounter24 );
 
             break;
@@ -383,7 +385,7 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
 
             break;
 
-        case COUNTER_TAGCACHE_STORE:
+        case COUNTER_LLCACHE_EVICT:
             return RISCV_READ_CSR( mhpmcounter27 );
 
             break;
