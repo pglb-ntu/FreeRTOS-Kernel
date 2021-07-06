@@ -63,14 +63,15 @@
 #define EVENT_DCACHE_STORE              0x33
 #define EVENT_DCACHE_STORE_MISS         0x34
 
-#define EVENT_LLCACHE_LOAD_MISS         0x00 /* TODO */
-#define EVENT_LLCACHE_LOAD_MISS_WAIT    0x00 /* TODO */
+#define EVENT_LLCACHE_FILL              0x61
+#define EVENT_LLCACHE_FILL_WAIT         0x62
+#define EVENT_LLCACHE_EVICT             0x64
 
-#define EVENT_TAGCACHE_LOAD             0x4e
-#define EVENT_TAGCACHE_LOAD_MISS        0x4f
-#define EVENT_TAGCACHE_STORE            0x4c
-#define EVENT_TAGCACHE_STORE_MISS       0x4d
-#define EVENT_TAGCACHE_EVICT            0x50
+#define EVENT_TAGCACHE_LOAD             0x42
+#define EVENT_TAGCACHE_LOAD_MISS        0x43
+#define EVENT_TAGCACHE_STORE            0x40
+#define EVENT_TAGCACHE_STORE_MISS       0x41
+#define EVENT_TAGCACHE_EVICT            0x44
 
 /* Static mapping of events */
 #define EVENT_3                         EVENT_REDIRECT
