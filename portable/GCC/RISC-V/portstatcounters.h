@@ -206,6 +206,13 @@ static const char* hpm_names[] =
 static inline void portCountersInit( void )
 {
     asm volatile (
+        #if __CHERI_PURE_CAPABILITY__
+        "cllc ct1, 1f\n\t"
+        "cspecialrw ct1, mtcc, ct1\n\t"
+        #else
+        "la t1, 1f\n\t"
+        "csrrw t1, mtvec, t1\n\t"
+        #endif
         "li t0, 0x0fffffff8\n\t"
         "csrs mcountinhibit, t0\n\t"
         "li t0, " STR( EVENT_3 ) "\n\t"
@@ -324,6 +331,14 @@ static inline void portCountersInit( void )
         "li t0, 0xfffffff8\n\t"
         /* un-inhibit all counters */
         "csrc mcountinhibit, t0\n\t"
+        // restore exception vector
+        ".align 2\n"
+        "1:\n\t"
+        #if __CHERI_PURE_CAPABILITY__
+        "cspecialw mtcc, ct1"
+        #else
+        "csrw mtvec, t1"
+        #endif
         :    /* no outputs */
         :    /* no inputs */
         : "t0",
