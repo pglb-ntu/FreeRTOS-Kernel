@@ -720,9 +720,9 @@ xPortGetCurrentCompartmentReturn:
 .balign 16
 .type xPortCompartmentEnterTrampoline, %function
 xPortCompartmentEnterTrampoline:
-.Lfunc:      .zero 16
-.Lcaptable:  .zero 16
-.Lcompid:    .zero 16
+.Lfunc:      .zero portWORD_SIZE
+.Lcaptable:  .zero portWORD_SIZE
+.Lcompid:    .zero portWORD_SIZE
 
 compartment_enter_code:
 
