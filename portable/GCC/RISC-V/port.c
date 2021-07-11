@@ -269,12 +269,6 @@ extern void xPortStartFirstTask( void );
 	}
 	#endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIMECMP_BASE_ADDRESS != 0 ) */
 
-#ifdef __CHERI_PURE_CAPABILITY__
-    #if ( configCHERI_COMPARTMENTALIZATION == 1 )
-        vPortCompartmentSetup();
-    #endif
-#endif
-
 	xPortStartFirstTask();
 
 	/* Should not get here as after calling xPortStartFirstTask() only tasks
