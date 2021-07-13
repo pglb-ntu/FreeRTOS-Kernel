@@ -391,7 +391,11 @@ is_exception:
 #else
 	cjalr             cra, ct0
 #endif
+#if configCHERI_COMPARTMENTALIZATION
 		beqz            a0, .Ltest_if_in_compartment /* Don't switch context if fault handler didn't block/unblock a task. */
+#else
+		beqz            a0, .Lbreak_on_exception /* Don't switch context if fault handler didn't block/unblock a task. */
+#endif
 		clgc            ct0, vTaskSwitchContext
 #ifdef __riscv_xcheri_mode_dependent_jumps
 		jalr.cap        cra, ct0
