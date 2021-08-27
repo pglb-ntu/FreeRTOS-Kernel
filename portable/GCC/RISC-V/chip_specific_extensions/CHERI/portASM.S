@@ -100,7 +100,7 @@ specific version of freertos_risc_v_chip_specific_extensions.h.  See the notes
 at the top of this file. */
 #ifdef __CHERI_PURE_CAPABILITY__
 #define portCONTEXT_SIZE (36 * portWORD_SIZE)
-#define portCOMPARTMENT_CONTEXT_SIZE (15 * portWORD_SIZE)
+#define portCOMPARTMENT_CONTEXT_SIZE (17 * portWORD_SIZE)
 #endif
 
 .global xPortStartFirstTask
@@ -160,29 +160,70 @@ at the top of this file. */
 .endm
 /*-----------------------------------------------------------*/
 
-.macro setCurrentPerTCBCompartment reg_temp, compid, ret_cap
-	cspecialr         \reg_temp, mscratchc
-	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp)
-	store_x           \ret_cap, 3 * portWORD_SIZE(\reg_temp)
-	store_x           csp, 4 * portWORD_SIZE(\reg_temp)
+.macro saveCurrentPerTCBCompartmentContext reg_temp, reg_temp2, compid, ret_cap
+	# Increase compartment stack level and store it to point to the current compartment context
+	cspecialr         \reg_temp2, mscratchc
+	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+	cincoffset        \reg_temp, \reg_temp, (portCOMPARTMENT_CONTEXT_SIZE)
+	store_x           \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+
+	# Save return compartment capablity (to use upon a per-compartment fault)
+	store_x           \ret_cap, 0 * portWORD_SIZE(\reg_temp)
+	# Save the caller's stack
+	store_x           csp, 1 * portWORD_SIZE(\reg_temp)
+
+	# Save new/current compid
 #if __riscv_xlen == 64
-	csd               \compid, 5 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+	csd               \compid, 2 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
 #else
-	csw               \compid, 5 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+	csw               \compid, 2 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
 #endif
 
-	# Increase compartment stack level and store it to point to the current compartment context
-	cincoffset        \reg_temp, \reg_temp, 3 * portWORD_SIZE
-	cspecialr         \ret_cap, mscratchc
-	store_x           \reg_temp, 1 * portWORD_SIZE(\ret_cap)
+	/* Save cgp into the caller's context */
+	store_x cgp, 3 * portWORD_SIZE(\reg_temp)
+
+	/* Save cra into the caller's context */
+	store_x cra, 4 * portWORD_SIZE(\reg_temp)
+
+	/* Save callee-saved context */
+	store_x cs0, 5 * portWORD_SIZE(\reg_temp)
+	store_x cs1, 6 * portWORD_SIZE(\reg_temp)
+	store_x cs2, 7 * portWORD_SIZE(\reg_temp)
+	store_x cs3, 8 * portWORD_SIZE(\reg_temp)
+	store_x cs4, 9 * portWORD_SIZE(\reg_temp)
+	store_x cs5, 10 * portWORD_SIZE(\reg_temp)
+	store_x cs6, 11 * portWORD_SIZE(\reg_temp)
+	store_x cs7, 12 * portWORD_SIZE(\reg_temp)
+	store_x cs8, 13 * portWORD_SIZE(\reg_temp)
+	store_x cs9, 14 * portWORD_SIZE(\reg_temp)
+	store_x cs10, 15 * portWORD_SIZE(\reg_temp)
+	store_x cs11, 16 * portWORD_SIZE(\reg_temp)
 .endm
 /*-----------------------------------------------------------*/
 
-.macro unWindPerTCBCompartment reg_temp, reg_temp2
-	# Decrease compartment stack level and store it to point to the caller's compartment context
+.macro restorePerTCBCompartmentContext reg_temp, reg_temp2
 	cspecialr         \reg_temp2, mscratchc
 	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
-	cincoffset        \reg_temp, \reg_temp, -(3 * portWORD_SIZE)
+
+	load_x cgp, 3 * portWORD_SIZE(\reg_temp)
+	load_x cra, 4 * portWORD_SIZE(\reg_temp)
+
+	/* Restore callee-saved context */
+	load_x cs0, 5 * portWORD_SIZE(\reg_temp)
+	load_x cs1, 6 * portWORD_SIZE(\reg_temp)
+	load_x cs2, 7 * portWORD_SIZE(\reg_temp)
+	load_x cs3, 8 * portWORD_SIZE(\reg_temp)
+	load_x cs4, 9 * portWORD_SIZE(\reg_temp)
+	load_x cs5, 10 * portWORD_SIZE(\reg_temp)
+	load_x cs6, 11 * portWORD_SIZE(\reg_temp)
+	load_x cs7, 12 * portWORD_SIZE(\reg_temp)
+	load_x cs8, 13 * portWORD_SIZE(\reg_temp)
+	load_x cs9, 14 * portWORD_SIZE(\reg_temp)
+	load_x cs10, 15 * portWORD_SIZE(\reg_temp)
+	load_x cs11, 16 * portWORD_SIZE(\reg_temp)
+
+	# Decrease compartment stack level and store it to point to the caller's compartment context
+	cincoffset        \reg_temp, \reg_temp, -(portCOMPARTMENT_CONTEXT_SIZE)
 	store_x           \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
 .endm
 /*-----------------------------------------------------------*/
@@ -729,15 +770,6 @@ xPortCompartmentEnterTrampoline:
 .Lcompid:    .zero portWORD_SIZE
 
 compartment_enter_code:
-
-	cincoffset csp, csp, -(portCOMPARTMENT_CONTEXT_SIZE)
-
-	/* Save cra in the callers' stack */
-	store_x cra, 14 * portWORD_SIZE(csp)
-	store_x cs0, 13 * portWORD_SIZE(csp)
-
-	cincoffset cs0, csp, portCOMPARTMENT_CONTEXT_SIZE
-
 	/* Check if it is an inter-compartment call */
 	getCurrentPerTCBCompartment t1
 	cllc ct0, .Lcompid
@@ -749,34 +781,18 @@ compartment_enter_code:
 	beq  t0, t1, same_compartment_call
 
 compartment_switch:
-	/* Save cgp and old current compid into the caller's stack */
-	store_x cgp, 2 * portWORD_SIZE(csp)
-	store_x ct1, 0 * portWORD_SIZE(csp)
-
-	/* Save callee's context */
-	store_x cs1, 4 * portWORD_SIZE(csp)
-	store_x cs2, 5 * portWORD_SIZE(csp)
-	store_x cs3, 6 * portWORD_SIZE(csp)
-	store_x cs4, 7 * portWORD_SIZE(csp)
-	store_x cs5, 8 * portWORD_SIZE(csp)
-	store_x cs6, 9 * portWORD_SIZE(csp)
-	store_x cs7, 10 * portWORD_SIZE(csp)
-	store_x cs8, 11 * portWORD_SIZE(csp)
-	store_x cs9, 12 * portWORD_SIZE(csp)
-
-	store_x cs10, 1 * portWORD_SIZE(csp)
-	store_x cs11, 3 * portWORD_SIZE(csp)
 
 	/* Enter a critical section setting the new compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
+	/* Set the new per-task compartment's csp and cra */
+	cllc ct4, compartment_return
+	saveCurrentPerTCBCompartmentContext ct1, ct2, t0, ct4
+
 	/* Set the new compartment's cgp */
 	cllc   cgp, .Lcaptable
 	load_x cgp, 0(cgp)
 	load_x cgp, 0(cgp)
 
-	/* Set the new per-task compartment's csp and cra */
-	cllc ct2, compartment_return
-	setCurrentPerTCBCompartment ct1, t0, ct2
 	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
 	/* Exit critical section */
 
@@ -798,48 +814,25 @@ compartment_call:
 	/* ------------------- */
 
 compartment_return:
-	/* Restore callee's context */
-	load_x cs11, 3 * portWORD_SIZE(csp)
-	load_x cs1, 4 * portWORD_SIZE(csp)
-	load_x cs2, 5 * portWORD_SIZE(csp)
-	load_x cs3, 6 * portWORD_SIZE(csp)
-	load_x cs4, 7 * portWORD_SIZE(csp)
-	load_x cs5, 8 * portWORD_SIZE(csp)
-	load_x cs6, 9 * portWORD_SIZE(csp)
-	load_x cs7, 10 * portWORD_SIZE(csp)
-	load_x cs8, 11 * portWORD_SIZE(csp)
-	load_x cs9, 12 * portWORD_SIZE(csp)
-	load_x cs10, 1 * portWORD_SIZE(csp)
 
-	/* Compartment returned, retrieve caller's state */
 	/* Enter a critical section setting the old compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
-	load_x cgp, 2 * portWORD_SIZE(csp)
-	load_x ct0, 0 * portWORD_SIZE(csp)
-
-	unWindPerTCBCompartment ct0, ct1
+	/* Compartment returned, retrieve caller's state */
+	restorePerTCBCompartmentContext ct0, ct1
 	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
 	/* Exit critical section */
 
-	j compartment_load_return
+	cret
 
 same_compartment_call:
 	cllc   ct1, .Lfunc
 	load_x ct1, 0(ct1)
 	/* GO! */
 #ifdef __riscv_xcheri_mode_dependent_jumps
-	jalr.cap  cra, ct1
+	jr.cap   ct1
 #else
-	cjalr     cra, ct1
+	cjr      ct1
 #endif
-
-compartment_load_return:
-	load_x cs0, 13 * portWORD_SIZE(csp)
-	load_x cra, 14 * portWORD_SIZE(csp)
-	cincoffset csp, csp, (portCOMPARTMENT_CONTEXT_SIZE)
-
-	/* cret */
-	cret
 xPortCompartmentEnterTrampolineEnd:
 .size xPortCompartmentEnterTrampoline, . - xPortCompartmentEnterTrampoline
 /*-----------------------------------------------------------*/
@@ -926,7 +919,7 @@ xPortCompartmentEnter:
 	store_x           csp, 0(ct3)
 
 	# Set the current compartment ID in mscratch
-	setCurrentPerTCBCompartment ca0, t2, cnull
+	saveCurrentPerTCBCompartmentContext ca0, ca1, t2, cnull
 
 	/* Load arguments for compartment */
 	clc               ca0, 0 * portWORD_SIZE(ct1)
@@ -1040,7 +1033,7 @@ xPortCompartmentReturn:
 	/* Beyond this point we count as outside the compartment */
 
 	load_x            ct0, 34 * portWORD_SIZE(csp)
-	setCurrentPerTCBCompartment ca0, t0, cnull
+	saveCurrentPerTCBCompartmentContext ca0, ca1, t0, cnull
 
 	load_x            ct0, 33 * portWORD_SIZE(csp)
 	cspecialw         ddc, ct0
@@ -1101,7 +1094,7 @@ xPortCompartmentTrapReturn:
 	csrw              mstatus, t0
 
 	load_x            ct0, 34 * portWORD_SIZE(csp)
-	setCurrentPerTCBCompartment ct1, t0, cnull
+	saveCurrentPerTCBCompartmentContext ct1, ct2, t0, cnull
 
 	load_x            c1, 1 * portWORD_SIZE(csp)
 	/* c2 is csp */

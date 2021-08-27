@@ -195,7 +195,8 @@ typedef struct {
 typedef struct {
     volatile uintcap_t    pxReturnCap;
     volatile uintcap_t    pxReturnStack;
-    volatile size_t       xCompID;
+    volatile uintcap_t    xCompID;
+    uintcap_t             callee_saved[14];
 } xCOMPARTMENT_CONTEXT;
 #endif
 
