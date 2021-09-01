@@ -109,6 +109,7 @@ at the top of this file. */
 .global xPortGetCurrentCompartmentID
 .global xPortGetCurrentCompartmentStack
 .global xPortGetCurrentCompartmentReturn
+.global xPortCompartmentTrampSetup
 .global xPortCompartmentEnterTrampoline
 .global xPortCompartmentEnterTrampolineEnd
 .global xPortCompartmentEnter
@@ -761,37 +762,43 @@ xPortGetCurrentCompartmentReturn:
 .size xPortGetCurrentCompartmentReturn, . - xPortGetCurrentCompartmentReturn
 /*-----------------------------------------------------------*/
 
+.balign 16
+.type xPortCompartmentTrampSetup, %function
+xPortCompartmentTrampSetup:
+.Lfunc:      .zero portWORD_SIZE
+.Lcaptable:  .zero portWORD_SIZE
+.Ltramp:     .zero portWORD_SIZE
+setup_regs:
+	addi t0, x0, configCOMPARTMENTS_NUM - 1
+	cllc ct2, .Lfunc
+	cllc ct1, .Ltramp
+	load_x ct1, 0(ct1)
+#ifdef __riscv_xcheri_mode_dependent_jumps
+	jr.cap    ct1
+#else
+	cjr       ct1
+#endif
+.size xPortCompartmentTrampSetup, . - xPortCompartmentTrampSetup
+/*-----------------------------------------------------------*/
+
 /* BaseType_t xPortCompartmentEnterTrampoline PRIVILEGED_FUNCTION; */
 .balign 16
 .type xPortCompartmentEnterTrampoline, %function
 xPortCompartmentEnterTrampoline:
-.Lfunc:      .zero portWORD_SIZE
-.Lcaptable:  .zero portWORD_SIZE
-.Lcompid:    .zero portWORD_SIZE
-
-compartment_enter_code:
-	/* Check if it is an inter-compartment call */
-	getCurrentPerTCBCompartment t1
-	cllc ct0, .Lcompid
-#if __riscv_xlen == 64
-	cld  t0, 0(ct0)
-#else
-	clw  t0, 0(ct0)
-#endif
-	beq  t0, t1, same_compartment_call
-
-compartment_switch:
+	# Assume ct2 is the start address of the metadata, and t0 has the dest compid
+	# Load func
+	load_x ct1, 0(ct2)
+	# Load captable
+	load_x ct2, (1 * portWORD_SIZE) (ct2)
+	load_x ct2, 0(ct2)
 
 	/* Enter a critical section setting the new compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
-	/* Set the new per-task compartment's csp and cra */
 	cllc ct4, compartment_return
-	saveCurrentPerTCBCompartmentContext ct1, ct2, t0, ct4
+	saveCurrentPerTCBCompartmentContext ct5, ct6, t0, ct4
 
 	/* Set the new compartment's cgp */
-	cllc   cgp, .Lcaptable
-	load_x cgp, 0(cgp)
-	load_x cgp, 0(cgp)
+	cmove cgp, ct2
 
 	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
 	/* Exit critical section */
@@ -801,9 +808,6 @@ compartment_switch:
 	/* ------------------- */
 
 compartment_call:
-	cllc   ct1, .Lfunc
-	load_x ct1, 0(ct1)
-
 	/* GO! */
 #ifdef __riscv_xcheri_mode_dependent_jumps
 	jalr.cap  cra, ct1
@@ -814,7 +818,6 @@ compartment_call:
 	/* ------------------- */
 
 compartment_return:
-
 	/* Enter a critical section setting the old compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
 	/* Compartment returned, retrieve caller's state */
@@ -823,16 +826,6 @@ compartment_return:
 	/* Exit critical section */
 
 	cret
-
-same_compartment_call:
-	cllc   ct1, .Lfunc
-	load_x ct1, 0(ct1)
-	/* GO! */
-#ifdef __riscv_xcheri_mode_dependent_jumps
-	jr.cap   ct1
-#else
-	cjr      ct1
-#endif
 xPortCompartmentEnterTrampolineEnd:
 .size xPortCompartmentEnterTrampoline, . - xPortCompartmentEnterTrampoline
 /*-----------------------------------------------------------*/
