@@ -741,7 +741,10 @@ xPortCompartmentTrampSetup:
 .Lcaptable:  .zero portWORD_SIZE
 .Ltramp:     .zero portWORD_SIZE
 setup_regs:
+	.option push
+	.option norvc
 	addi t0, x0, configCOMPARTMENTS_NUM - 1
+	.option pop
 	cllc ct2, .Lfunc
 	cllc ct1, .Ltramp
 	load_x ct1, 0(ct1)
