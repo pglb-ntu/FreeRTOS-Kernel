@@ -213,9 +213,11 @@ handle_asynchronous:
 		#endif /* __riscv_xlen == 64 */
 
 		load_x sp, xISRStackTop			/* Switch to ISR stack before function call. */
-		jal xTaskIncrementTick
+		la t0, xTaskIncrementTick
+		jalr t0
 		beqz a0, processed_source		/* Don't switch context if incrementing tick didn't unblock a task. */
-		jal vTaskSwitchContext
+		la t0, vTaskSwitchContext
+		jalr t0
 		j processed_source
 
 	test_if_external_interrupt:			/* If there is a CLINT and the mtimer interrupt is not pending then check to see if an external interrupt is pending. */
@@ -237,7 +239,8 @@ test_if_environment_call:
 	li t0, 11 							/* 11 == environment call. */
 	bne a0, t0, is_exception			/* Not an M environment call, so some other exception. */
 	load_x sp, xISRStackTop				/* Switch to ISR stack before function call. */
-	jal vTaskSwitchContext
+	la t0, vTaskSwitchContext
+	jalr t0
 	j processed_source
 
 is_exception:
