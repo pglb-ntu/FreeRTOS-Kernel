@@ -228,7 +228,7 @@ handle_asynchronous:
 
 	load_x sp, xISRStackTop				/* Switch to ISR stack before function call. */
 	la t0, portasmHANDLE_INTERRUPT
-	jr t0						/* Jump to the interrupt handler if there is no CLINT or if there is a CLINT and it has been determined that an external interrupt is pending. */
+	jalr t0						/* Jump to the interrupt handler if there is no CLINT or if there is a CLINT and it has been determined that an external interrupt is pending. */
 	j processed_source
 
 handle_synchronous:
