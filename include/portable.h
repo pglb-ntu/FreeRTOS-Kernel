@@ -209,8 +209,8 @@ void vPortEndScheduler( void ) PRIVILEGED_FUNCTION;
 
 #if ( configCHERI_COMPARTMENTALIZATION == 1 )
     size_t xPortGetCurrentCompartmentID( void ) PRIVILEGED_FUNCTION;
-    uintcap_t xPortGetCurrentCompartmentStack( void ) PRIVILEGED_FUNCTION;
-    uintcap_t xPortGetCurrentCompartmentReturn( void ) PRIVILEGED_FUNCTION;
+    void* xPortGetCurrentCompartmentStack( void ) PRIVILEGED_FUNCTION;
+    void* xPortGetCurrentCompartmentReturn( void ) PRIVILEGED_FUNCTION;
     xCOMPARTMENT_RET xPortCompartmentEnter( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID ) PRIVILEGED_FUNCTION;
 #endif
 
