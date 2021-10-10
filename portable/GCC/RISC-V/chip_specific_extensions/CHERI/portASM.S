@@ -746,13 +746,9 @@ setup_regs:
 	addi t0, x0, configCOMPARTMENTS_NUM - 1
 	.option pop
 	cllc ct2, .Lfunc
-	cllc ct1, .Ltramp
-	load_x ct1, 0(ct1)
-#ifdef __riscv_xcheri_mode_dependent_jumps
-	jr.cap    ct1
-#else
+0:	auipcc ct1, %pcrel_hi(.Ltramp)
+	load_x ct1, %pcrel_lo(0b)(ct1)
 	cjr       ct1
-#endif
 .size xPortCompartmentTrampSetup, . - xPortCompartmentTrampSetup
 /*-----------------------------------------------------------*/
 
