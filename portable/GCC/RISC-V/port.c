@@ -98,7 +98,7 @@ interrupt stack after the scheduler has started. */
 #if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
 	static uintptr_t riscv_exceptions_table[64] = {NULL};
 
-	void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHandler)( void *pvParameter) )
+	void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHandler)( uintptr_t *pvParameter) )
 	{
 		configASSERT(ulExceptiontNumber <= 64);
 		riscv_exceptions_table[ulExceptiontNumber] = pvHandler;

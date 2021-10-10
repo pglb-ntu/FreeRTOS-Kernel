@@ -207,7 +207,7 @@ typedef struct {
  * Exception handler functions must return a non-zero value if executing the
  * handler resulted in a task switch being required.
  */
-void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHandler)( void *pvParameter ) );
+void vPortSetExceptionHandler( UBaseType_t  ulExceptiontNumber, uint32_t (*pvHandler)( uintptr_t *pvParameter ) );
 
 /*
  * A C-entry to a shared exception handler. ulExceptiontNumber is mcuase ane
