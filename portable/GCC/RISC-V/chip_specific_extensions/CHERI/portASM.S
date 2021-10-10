@@ -774,6 +774,23 @@ xPortCompartmentEnterTrampoline:
 	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
 	/* Exit critical section */
 
+#if 0
+	cmove             c18, cnull
+	cmove             c19, cnull
+	cmove             c20, cnull
+	cmove             c21, cnull
+	cmove             c22, cnull
+	cmove             c23, cnull
+	cmove             c24, cnull
+	cmove             c25, cnull
+	cmove             c26, cnull
+	cmove             c27, cnull
+	cmove             c28, cnull
+	cmove             c29, cnull
+	cmove             c30, cnull
+	cmove             c31, cnull
+#endif
+
 	/* Beyond this point, we are now in a new compartment */
 
 	/* ------------------- */
