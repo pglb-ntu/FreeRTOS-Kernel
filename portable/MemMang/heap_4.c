@@ -35,6 +35,7 @@
 #include <stdlib.h>
 
 #ifdef __CHERI_PURE_CAPABILITY__
+#include <cheriintrin.h>
 #include <cheric.h>
 #endif
 
@@ -122,7 +123,14 @@ void * pvPortMalloc( size_t xWantedSize )
     void * pvReturn = NULL;
 
 #ifdef __CHERI_PURE_CAPABILITY__
+    xWantedSize = cheri_representable_length( xWantedSize );
+    size_t xRepresentableAlignmentMask = cheri_representable_alignment_mask( xWantedSize );
+
+    /* Reset a representable caller block size */
     size_t xCallerWantedSize = xWantedSize;
+
+    /* Representable block start alignment requirment in bytes */
+    size_t xRepresentableAlignmentBytes = ~xRepresentableAlignmentMask + 1;
 #endif
 
     vTaskSuspendAll();
@@ -183,8 +191,92 @@ void * pvPortMalloc( size_t xWantedSize )
                 pxPreviousBlock = &xStart;
                 pxBlock = xStart.pxNextFreeBlock;
 
-                while( ( pxBlock->xBlockSize < xWantedSize ) && ( pxBlock->pxNextFreeBlock != NULL ) )
+                while( ( pxBlock->pxNextFreeBlock != NULL ) )
                 {
+
+                    if ( pxBlock->xBlockSize < xWantedSize )
+                        goto nextFreeBlock;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+
+                    /* The block will be already representable as portBYTE_ALIGNMENT is bigger than
+                     * the required alignment. Do nothing, found the block.
+                     */
+                    if ( xRepresentableAlignmentBytes <= portBYTE_ALIGNMENT )
+                        break;
+
+                    /* Get the start address of the free block */
+                    char* blockStartAddress = ( char * ) ( pxBlock );
+                    size_t xRepresentableAlignmentGap;
+                    char* alignedStartBlockAddr;
+
+                    /* Keep increasing the block start address until the following block layout
+                     * can fit in a block.
+                     *
+                     *
+                     *      New block addr    Representable/aligned user start address block
+                     *          |             |
+                     *          v             v
+                     * -----------------------------------------
+                     * | unused | BlockLink_t | User block.....|
+                     * -----------------------------------------
+                     * ^                       {               }
+                     * |                        ---------------
+                     * Old block start addr            ^
+                     * {                      }        |
+                     *  ----------------------   Representable user block length
+                     *           ^
+                     *           |
+                     *      xRepresentableAlignmentGap
+                     *
+                     * FIXME: Currently the unused region is wasted, but we meed want to optimise
+                     * that later.
+                     */
+                    while (1) {
+
+                        /* Get a representable user start address */
+                        alignedStartBlockAddr = __builtin_align_up( blockStartAddress, xRepresentableAlignmentBytes );
+
+                        /* Calculate the new xRepresentableAlignmentGap */
+                        xRepresentableAlignmentGap = ( size_t ) ( alignedStartBlockAddr - ( char * ) pxBlock );
+
+                        /* xRepresentableAlignmentGap should fit BlockLink_t at least, if not, keep increasing
+                         * the gap size until that is true
+                         */
+                        if ( xRepresentableAlignmentGap <= xHeapStructSize ) {
+                            blockStartAddress += xRepresentableAlignmentBytes;
+                            continue;
+                        }
+
+                        /* Recalculate the overall required block size including the xRepresentableAlignmentGap */
+                        size_t xOverAllSize = xWantedSize + xRepresentableAlignmentGap - xHeapStructSize;
+
+                        /* Check the increased xRepresentableAlignmentGap still fits in the block */
+                        if ( pxBlock->xBlockSize < xOverAllSize )
+                            goto nextFreeBlock;
+
+                        /* Found a free block that could fit a representable user block */
+
+                        void* pxNextFreeBlock = pxBlock->pxNextFreeBlock;
+
+                        /* Substract the unused area from the block size */
+                        size_t xNewBlockSize = pxBlock->xBlockSize - ( xRepresentableAlignmentGap - xHeapStructSize );
+
+                        /* Invalidate the old unused area */
+                        pxBlock->pxNextFreeBlock = NULL;
+                        pxBlock->xBlockSize = 0;
+
+                        /* Reset the block metadata with new representable start addresse and size */
+                        pxBlock = alignedStartBlockAddr - xHeapStructSize;
+                        pxBlock->pxNextFreeBlock = pxNextFreeBlock;
+                        pxBlock->xBlockSize = xNewBlockSize;
+                        pxPreviousBlock->pxNextFreeBlock = pxBlock;
+                        break;
+                    }
+#endif
+                    /* Found a suitable free block, break from the while */
+                    break;
+nextFreeBlock:
                     pxPreviousBlock = pxBlock;
                     pxBlock = pxBlock->pxNextFreeBlock;
                 }
@@ -277,7 +369,7 @@ void * pvPortMalloc( size_t xWantedSize )
 
     configASSERT( ( ( ( size_t ) pvReturn ) & ( size_t ) portBYTE_ALIGNMENT_MASK ) == 0 );
 #ifdef __CHERI_PURE_CAPABILITY__
-    pvReturn = cheri_csetbounds(pvReturn, xCallerWantedSize);
+    pvReturn = cheri_csetboundsexact(pvReturn, xCallerWantedSize);
 #endif
     return pvReturn;
 }
