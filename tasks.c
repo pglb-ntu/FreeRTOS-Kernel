@@ -845,10 +845,12 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
         if( ( uxPriority & portPRIVILEGE_BIT ) != 0U )
         {
             xRunPrivileged = pdTRUE;
+            pxNewTCB->xMPUSettings.xIsPrivileged = pdTRUE;
         }
         else
         {
             xRunPrivileged = pdFALSE;
+            pxNewTCB->xMPUSettings.xIsPrivileged = pdFALSE;
         }
         uxPriority &= ~portPRIVILEGE_BIT;
     #endif /* portUSING_MPU_WRAPPERS == 1 */

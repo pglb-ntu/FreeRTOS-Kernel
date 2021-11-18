@@ -331,6 +331,13 @@ static inline void portCountersInit( void )
         "li t0, 0xfffffff8\n\t"
         /* un-inhibit all counters */
         "csrc mcountinhibit, t0\n\t"
+#if ( configENABLE_MPU == 1 )
+        /* Export counters to user */
+        "li t0, 0xffffffff\n\t"
+        "csrw mcounteren, t0\n\t"
+        /* Uncomment if S-mode is also implemented (but not used) */
+        /*"csrw scounteren, t0\n\t"*/
+#endif
         // restore exception vector
         ".align 2\n"
         "1:\n\t"
@@ -359,147 +366,147 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
     switch( counterID )
     {
         case COUNTER_CYCLE:
-            return RISCV_READ_CSR( mcycle );
+            return RISCV_READ_CSR( cycle );
 
             break;
 
         case COUNTER_INSTRET:
-            return RISCV_READ_CSR( minstret );
+            return RISCV_READ_CSR( instret );
 
             break;
 
         case COUNTER_REDIRECT:
-            return RISCV_READ_CSR( mhpmcounter3 );
+            return RISCV_READ_CSR( hpmcounter3 );
 
             break;
 
         case COUNTER_BRANCH:
-            return RISCV_READ_CSR( mhpmcounter4 );
+            return RISCV_READ_CSR( hpmcounter4 );
 
             break;
 
         case COUNTER_JAL:
-            return RISCV_READ_CSR( mhpmcounter5 );
+            return RISCV_READ_CSR( hpmcounter5 );
 
             break;
 
         case COUNTER_JALR:
-            return RISCV_READ_CSR( mhpmcounter6 );
+            return RISCV_READ_CSR( hpmcounter6 );
 
             break;
 
         case COUNTER_TRAP:
-            return RISCV_READ_CSR( mhpmcounter7 );
+            return RISCV_READ_CSR( hpmcounter7 );
 
             break;
 
         case COUNTER_LOAD_WAIT:
-            return RISCV_READ_CSR( mhpmcounter8 );
+            return RISCV_READ_CSR( hpmcounter8 );
 
             break;
 
         case COUNTER_CAP_LOAD:
-            return RISCV_READ_CSR( mhpmcounter9 );
+            return RISCV_READ_CSR( hpmcounter9 );
 
             break;
 
         case COUNTER_CAP_STORE:
-            return RISCV_READ_CSR( mhpmcounter10 );
+            return RISCV_READ_CSR( hpmcounter10 );
 
             break;
 
         case COUNTER_ITLB_MISS:
-            return RISCV_READ_CSR( mhpmcounter11 );
+            return RISCV_READ_CSR( hpmcounter11 );
 
             break;
 
         case COUNTER_ICACHE_LOAD:
-            return RISCV_READ_CSR( mhpmcounter12 );
+            return RISCV_READ_CSR( hpmcounter12 );
 
             break;
 
         case COUNTER_ICACHE_LOAD_MISS:
-            return RISCV_READ_CSR( mhpmcounter13 );
+            return RISCV_READ_CSR( hpmcounter13 );
 
             break;
 
         case COUNTER_ICACHE_LOAD_MISS_WAIT:
-            return RISCV_READ_CSR( mhpmcounter14 );
+            return RISCV_READ_CSR( hpmcounter14 );
 
             break;
 
         case COUNTER_DTLB_ACCESS:
-            return RISCV_READ_CSR( mhpmcounter15 );
+            return RISCV_READ_CSR( hpmcounter15 );
 
             break;
 
         case COUNTER_DTLB_MISS:
-            return RISCV_READ_CSR( mhpmcounter16 );
+            return RISCV_READ_CSR( hpmcounter16 );
 
             break;
 
         case COUNTER_DTLB_MISS_WAIT:
-            return RISCV_READ_CSR( mhpmcounter17 );
+            return RISCV_READ_CSR( hpmcounter17 );
 
             break;
 
         case COUNTER_DCACHE_LOAD:
-            return RISCV_READ_CSR( mhpmcounter18 );
+            return RISCV_READ_CSR( hpmcounter18 );
 
             break;
 
         case COUNTER_DCACHE_LOAD_MISS:
-            return RISCV_READ_CSR( mhpmcounter19 );
+            return RISCV_READ_CSR( hpmcounter19 );
 
             break;
 
         case COUNTER_DCACHE_LOAD_MISS_WAIT:
-            return RISCV_READ_CSR( mhpmcounter20 );
+            return RISCV_READ_CSR( hpmcounter20 );
 
             break;
 
         case COUNTER_DCACHE_STORE:
-            return RISCV_READ_CSR( mhpmcounter21 );
+            return RISCV_READ_CSR( hpmcounter21 );
 
             break;
 
         case COUNTER_DCACHE_STORE_MISS:
-            return RISCV_READ_CSR( mhpmcounter22 );
+            return RISCV_READ_CSR( hpmcounter22 );
 
             break;
 
         case COUNTER_LLCACHE_FILL:
-            return RISCV_READ_CSR( mhpmcounter23 );
+            return RISCV_READ_CSR( hpmcounter23 );
 
             break;
 
         case COUNTER_LLCACHE_FILL_WAIT:
-            return RISCV_READ_CSR( mhpmcounter24 );
+            return RISCV_READ_CSR( hpmcounter24 );
 
             break;
 
         case COUNTER_TAGCACHE_LOAD:
-            return RISCV_READ_CSR( mhpmcounter25 );
+            return RISCV_READ_CSR( hpmcounter25 );
 
             break;
 
         case COUNTER_TAGCACHE_LOAD_MISS:
-            return RISCV_READ_CSR( mhpmcounter26 );
+            return RISCV_READ_CSR( hpmcounter26 );
 
             break;
 
         case COUNTER_LLCACHE_EVICT:
-            return RISCV_READ_CSR( mhpmcounter27 );
+            return RISCV_READ_CSR( hpmcounter27 );
 
             break;
 
         case COUNTER_TAGCACHE_STORE_MISS:
-            return RISCV_READ_CSR( mhpmcounter28 );
+            return RISCV_READ_CSR( hpmcounter28 );
 
             break;
 
         case COUNTER_TAGCACHE_EVICT:
-            return RISCV_READ_CSR( mhpmcounter29 );
+            return RISCV_READ_CSR( hpmcounter29 );
 
             break;
 
@@ -509,35 +516,35 @@ static inline PortCounter_t portCounterGet( PortCounterID_t counterID )
 }
 
 static void PortStatCounters_ReadAll(cheri_riscv_hpms* hpms) {
-  hpms->counters[COUNTER_CYCLE] = RISCV_READ_CSR( mcycle );
-  hpms->counters[COUNTER_INSTRET] = RISCV_READ_CSR( minstret );
-  hpms->counters[COUNTER_REDIRECT] = RISCV_READ_CSR( mhpmcounter3 );
-  hpms->counters[COUNTER_BRANCH] = RISCV_READ_CSR( mhpmcounter4 );
-  hpms->counters[COUNTER_JAL] = RISCV_READ_CSR( mhpmcounter5 );
-  hpms->counters[COUNTER_JALR] = RISCV_READ_CSR( mhpmcounter6 );
-  hpms->counters[COUNTER_TRAP] = RISCV_READ_CSR( mhpmcounter7 );
-  hpms->counters[COUNTER_LOAD_WAIT] = RISCV_READ_CSR( mhpmcounter8 );
-  hpms->counters[COUNTER_CAP_LOAD] = RISCV_READ_CSR( mhpmcounter9 );
-  hpms->counters[COUNTER_CAP_STORE] = RISCV_READ_CSR( mhpmcounter10 );
-  hpms->counters[COUNTER_ITLB_MISS] = RISCV_READ_CSR( mhpmcounter11 );
-  hpms->counters[COUNTER_ICACHE_LOAD] = RISCV_READ_CSR( mhpmcounter12 );
-  hpms->counters[COUNTER_ICACHE_LOAD_MISS] = RISCV_READ_CSR( mhpmcounter13 );
-  hpms->counters[COUNTER_ICACHE_LOAD_MISS_WAIT] = RISCV_READ_CSR( mhpmcounter14 );
-  hpms->counters[COUNTER_DTLB_ACCESS] = RISCV_READ_CSR( mhpmcounter15 );
-  hpms->counters[COUNTER_DTLB_MISS] = RISCV_READ_CSR( mhpmcounter16 );
-  hpms->counters[COUNTER_DTLB_MISS_WAIT] = RISCV_READ_CSR( mhpmcounter17 );
-  hpms->counters[COUNTER_DCACHE_LOAD] = RISCV_READ_CSR( mhpmcounter18 );
-  hpms->counters[COUNTER_DCACHE_LOAD_MISS] = RISCV_READ_CSR( mhpmcounter19 );
-  hpms->counters[COUNTER_DCACHE_LOAD_MISS_WAIT] = RISCV_READ_CSR( mhpmcounter20 );
-  hpms->counters[COUNTER_DCACHE_STORE] = RISCV_READ_CSR( mhpmcounter21 );
-  hpms->counters[COUNTER_DCACHE_STORE_MISS] = RISCV_READ_CSR( mhpmcounter22 );
-  hpms->counters[COUNTER_LLCACHE_FILL] = RISCV_READ_CSR( mhpmcounter23 );
-  hpms->counters[COUNTER_LLCACHE_FILL_WAIT] = RISCV_READ_CSR( mhpmcounter24 );
-  hpms->counters[COUNTER_TAGCACHE_LOAD] = RISCV_READ_CSR( mhpmcounter25 );
-  hpms->counters[COUNTER_TAGCACHE_LOAD_MISS] = RISCV_READ_CSR( mhpmcounter26 );
-  hpms->counters[COUNTER_LLCACHE_EVICT] = RISCV_READ_CSR( mhpmcounter27 );
-  hpms->counters[COUNTER_TAGCACHE_STORE_MISS] = RISCV_READ_CSR( mhpmcounter28 );
-  hpms->counters[COUNTER_TAGCACHE_EVICT] = RISCV_READ_CSR( mhpmcounter29 );
+  hpms->counters[COUNTER_CYCLE] = RISCV_READ_CSR( cycle );
+  hpms->counters[COUNTER_INSTRET] = RISCV_READ_CSR( instret );
+  hpms->counters[COUNTER_REDIRECT] = RISCV_READ_CSR( hpmcounter3 );
+  hpms->counters[COUNTER_BRANCH] = RISCV_READ_CSR( hpmcounter4 );
+  hpms->counters[COUNTER_JAL] = RISCV_READ_CSR( hpmcounter5 );
+  hpms->counters[COUNTER_JALR] = RISCV_READ_CSR( hpmcounter6 );
+  hpms->counters[COUNTER_TRAP] = RISCV_READ_CSR( hpmcounter7 );
+  hpms->counters[COUNTER_LOAD_WAIT] = RISCV_READ_CSR( hpmcounter8 );
+  hpms->counters[COUNTER_CAP_LOAD] = RISCV_READ_CSR( hpmcounter9 );
+  hpms->counters[COUNTER_CAP_STORE] = RISCV_READ_CSR( hpmcounter10 );
+  hpms->counters[COUNTER_ITLB_MISS] = RISCV_READ_CSR( hpmcounter11 );
+  hpms->counters[COUNTER_ICACHE_LOAD] = RISCV_READ_CSR( hpmcounter12 );
+  hpms->counters[COUNTER_ICACHE_LOAD_MISS] = RISCV_READ_CSR( hpmcounter13 );
+  hpms->counters[COUNTER_ICACHE_LOAD_MISS_WAIT] = RISCV_READ_CSR( hpmcounter14 );
+  hpms->counters[COUNTER_DTLB_ACCESS] = RISCV_READ_CSR( hpmcounter15 );
+  hpms->counters[COUNTER_DTLB_MISS] = RISCV_READ_CSR( hpmcounter16 );
+  hpms->counters[COUNTER_DTLB_MISS_WAIT] = RISCV_READ_CSR( hpmcounter17 );
+  hpms->counters[COUNTER_DCACHE_LOAD] = RISCV_READ_CSR( hpmcounter18 );
+  hpms->counters[COUNTER_DCACHE_LOAD_MISS] = RISCV_READ_CSR( hpmcounter19 );
+  hpms->counters[COUNTER_DCACHE_LOAD_MISS_WAIT] = RISCV_READ_CSR( hpmcounter20 );
+  hpms->counters[COUNTER_DCACHE_STORE] = RISCV_READ_CSR( hpmcounter21 );
+  hpms->counters[COUNTER_DCACHE_STORE_MISS] = RISCV_READ_CSR( hpmcounter22 );
+  hpms->counters[COUNTER_LLCACHE_FILL] = RISCV_READ_CSR( hpmcounter23 );
+  hpms->counters[COUNTER_LLCACHE_FILL_WAIT] = RISCV_READ_CSR( hpmcounter24 );
+  hpms->counters[COUNTER_TAGCACHE_LOAD] = RISCV_READ_CSR( hpmcounter25 );
+  hpms->counters[COUNTER_TAGCACHE_LOAD_MISS] = RISCV_READ_CSR( hpmcounter26 );
+  hpms->counters[COUNTER_LLCACHE_EVICT] = RISCV_READ_CSR( hpmcounter27 );
+  hpms->counters[COUNTER_TAGCACHE_STORE_MISS] = RISCV_READ_CSR( hpmcounter28 );
+  hpms->counters[COUNTER_TAGCACHE_EVICT] = RISCV_READ_CSR( hpmcounter29 );
 }
 
 static void PortStatCounters_DiffAll(cheri_riscv_hpms* start_hpms, cheri_riscv_hpms* end_hpms, cheri_riscv_hpms* diff_hpms) {

@@ -118,11 +118,18 @@ at the top of this file. */
 	.extern configTASK_RETURN_ADDRESS
 #endif /* configTASK_RETURN_ADDRESS */
 
+#if (configENABLE_MPU == 1)
+.global xIsPrivileged
+.global vRaisePrivilege
+.global vResetPrivilege
+#endif
+
 /*-----------------------------------------------------------*/
 
+.section privileged_functions, "wax", @progbits
 .align 8
 freertos_risc_v_trap_handler:
-	addi sp, sp, -portCONTEXT_SIZE
+	addi sp, sp, -portCONTEXT_SIZE - (portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
 	store_x x1, 1 * portWORD_SIZE( sp )
 	store_x x5, 2 * portWORD_SIZE( sp )
 	store_x x6, 3 * portWORD_SIZE( sp )
@@ -157,7 +164,8 @@ freertos_risc_v_trap_handler:
 
 	portasmSAVE_ADDITIONAL_REGISTERS	/* Defined in freertos_risc_v_chip_specific_extensions.h to save any registers unique to the RISC-V implementation. */
 
-	load_x  t0, pxCurrentTCB			/* Load pxCurrentTCB. */
+	la       t0, pxCurrentTCB			/* Load pxCurrentTCB. */
+	load_x   t0, 0(t0)
 	store_x  sp, 0( t0 )				/* Write sp to first TCB member. */
 
 	csrr a0, mcause
@@ -236,8 +244,31 @@ handle_synchronous:
 	store_x a1, 0( sp )					/* Save updated exception return address. */
 
 test_if_environment_call:
+#if (configENABLE_MPU == 1)
+	li   t0, 8                          /* 8 == user environment call. */
+	bne  a0, t0, mmode                  /* Not an M environment call, so some other exception. */
+	li   t1, 1                          /* yield syscall number */
+	beq  a7, t1, yield
+	li   t1, 3                          /* raise priv syscall number */
+	bne  a7, t1, is_exception
+
+	load_x  t0, 29 * portWORD_SIZE( sp )
+	li   t1, 0x1800
+	or   t0, t0, t1
+	store_x  t0, 29 * portWORD_SIZE( sp )
+	j processed_source
+#endif
+mmode:
 	li t0, 11 							/* 11 == environment call. */
 	bne a0, t0, is_exception			/* Not an M environment call, so some other exception. */
+#if (configENABLE_MPU == 1)
+	li   t1, 1                          /* yield syscall number */
+	beq  a7, t1, yield
+	li   t1, 3                          /* raise priv syscall number */
+	bne  a7, t1, is_exception
+	j processed_source
+#endif
+yield:
 	load_x sp, xISRStackTop				/* Switch to ISR stack before function call. */
 	la t0, vTaskSwitchContext
 	jalr t0
@@ -254,7 +285,8 @@ as_yet_unhandled:
 	j as_yet_unhandled
 
 processed_source:
-	load_x  t1, pxCurrentTCB			/* Load pxCurrentTCB. */
+	la      t1, pxCurrentTCB			/* Load pxCurrentTCB. */
+	load_x  t1, 0(t1)
 	load_x  sp, 0( t1 )				 	/* Read sp from first TCB member. */
 
 	/* Load mret with the address of the next instruction in the task to run next. */
@@ -295,7 +327,7 @@ processed_source:
 	load_x  x29, 26 * portWORD_SIZE( sp )	/* t4 */
 	load_x  x30, 27 * portWORD_SIZE( sp )	/* t5 */
 	load_x  x31, 28 * portWORD_SIZE( sp )	/* t6 */
-	addi sp, sp, portCONTEXT_SIZE
+	addi sp, sp, portCONTEXT_SIZE + (portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
 
 	mret
 /*-----------------------------------------------------------*/
@@ -311,8 +343,9 @@ xPortStartFirstTask:
 	csrw mtvec, t0
 #endif /* portasmHAS_CLILNT */
 
-	load_x  sp, pxCurrentTCB			/* Load pxCurrentTCB. */
-	load_x  sp, 0( sp )				 	/* Read sp from first TCB member. */
+	la      t0, pxCurrentTCB			/* Load pxCurrentTCB. */
+	load_x  t0, 0( t0 )
+	load_x  sp, 0( t0 )				 	/* Read sp from first TCB member. */
 
 	load_x  x1, 0( sp ) /* Note for starting the scheduler the exception return address is used as the function return address. */
 
@@ -346,12 +379,21 @@ xPortStartFirstTask:
 	load_x  x31, 28 * portWORD_SIZE( sp )	/* t6 */
 
 	load_x  x5, 29 * portWORD_SIZE( sp )	/* Initial mstatus into x5 (t0) */
+#if (configENABLE_MPU == 1)
+	addi x5, x5, 0x80						/* Set MPIE bit so the task starts with interrupts enabled */
+#else
 	addi x5, x5, 0x08						/* Set MIE bit so the first task starts with interrupts enabled - required as returns with ret not eret. */
-	csrrw  x0, mstatus, x5					/* Interrupts enabled from here! */
-	load_x  x5, 2 * portWORD_SIZE( sp )		/* Initial x5 (t0) value. */
+#endif
+	csrrw x0, mstatus, x5					/* Interrupts enabled from here! */
+	load_x x5, 2 * portWORD_SIZE( sp )		/* Initial x5 (t0) value. */
 
-	addi	sp, sp, portCONTEXT_SIZE
+	addi	sp, sp, portCONTEXT_SIZE + (portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
+#if (configENABLE_MPU == 1)
+	csrw mepc, x1
+	mret
+#else
 	ret
+#endif
 /*-----------------------------------------------------------*/
 
 /*
@@ -384,6 +426,7 @@ xPortStartFirstTask:
  * where the global and thread pointers are currently assumed to be constant so
  * are not saved:
  *
+ * [chip specific registers go here]
  * mstatus
  * x31
  * x30
@@ -413,17 +456,30 @@ xPortStartFirstTask:
  * x6
  * x5
  * portTASK_RETURN_ADDRESS
- * [chip specific registers go here]
  * pxCode
  */
 .align 8
 pxPortInitialiseStack:
-
+	addi t0, x0, portasmADDITIONAL_CONTEXT_SIZE /* The number of chip specific additional registers. */
+chip_specific_stack_frame:				/* First add any chip specific registers to the stack frame being created. */
+	beq t0, x0, 1f						/* No more chip specific registers to save. */
+	addi a0, a0, -portWORD_SIZE			/* Make space for chip specific register. */
+	store_x x0, 0(a0)					/* Give the chip specific register an initial value of zero. */
+	addi t0, t0, -1						/* Decrement the count of chip specific registers remaining. */
+	j chip_specific_stack_frame			/* Until no more chip specific registers. */
+1:
 	csrr t0, mstatus					/* Obtain current mstatus value. */
 	andi t0, t0, ~0x8					/* Ensure interrupts are disabled when the stack is restored within an ISR.  Required when a task is created after the schedulre has been started, otherwise interrupts would be disabled anyway. */
 	addi t1, x0, 0x188					/* Generate the value 0x1880, which are the MPIE and MPP bits to set in mstatus. */
 	slli t1, t1, 4
-	or t0, t0, t1						/* Set MPIE and MPP bits in mstatus value. */
+
+#if (configENABLE_MPU == 1)
+	bnez a3, 2f
+	li   t2, ~0x1800
+	and  t1, t1, t2
+#endif
+2:
+	or   t0, t0, t1						/* Set MPIE and MPP bits in mstatus value. */
 
 	addi a0, a0, -portWORD_SIZE
 	store_x t0, 0(a0)					/* mstatus onto the stack. */
@@ -436,15 +492,44 @@ pxPortInitialiseStack:
 	#else
 		store_x x0, 0(a0)				/* 0 Return address onto the stack (will fault if a task returns) */
 	#endif /* configTASK_RETURN_ADDRESS */
-	addi t0, x0, portasmADDITIONAL_CONTEXT_SIZE /* The number of chip specific additional registers. */
-chip_specific_stack_frame:				/* First add any chip specific registers to the stack frame being created. */
-	beq t0, x0, 1f						/* No more chip specific registers to save. */
-	addi a0, a0, -portWORD_SIZE			/* Make space for chip specific register. */
-	store_x x0, 0(a0)					/* Give the chip specific register an initial value of zero. */
-	addi t0, t0, -1						/* Decrement the count of chip specific registers remaining. */
-	j chip_specific_stack_frame			/* Until no more chip specific registers. */
-1:
 	addi a0, a0, -portWORD_SIZE
 	store_x a1, 0(a0)					/* mret value (pxCode parameter) onto the stack. */
 	ret
+/*-----------------------------------------------------------*/
+
+#if (configENABLE_MPU == 1)
+.section .text.unpriv, "wax", @progbits
+.align 8
+.type xIsPrivileged, @function
+xIsPrivileged:
+	la      t1, pxCurrentTCB			/* Load pxCurrentTCB. */
+	load_x  t1, 0(t1)
+	beqz    t1, 1f
+	load_x  a0, 1*portWORD_SIZE( t1 ) 	/* Read xMPUSettings->xIsPrivileged from second TCB member. */
+1:
+	ret
+/*-----------------------------------------------------------*/
+
+.align 8
+.type vRaisePrivilege, @function
+vRaisePrivilege:
+	li a7, 3
+	ecall
+	ret
+/*-----------------------------------------------------------*/
+
+.align 8
+.type vResetPrivilege, @function
+vResetPrivilege:
+	la      t1, pxCurrentTCB			/* Load pxCurrentTCB. */
+	load_x  t1, 0(t1)
+	load_x  a0, 1*portWORD_SIZE( t1 ) 	/* Read xMPUSettings->xIsPrivileged from second TCB member. */
+	beqz   a0, reset
+	ret
+reset:
+	csrw mepc, ra
+	li   t0, (3 << 11)
+	csrc mstatus, t0
+	mret
+#endif
 /*-----------------------------------------------------------*/

@@ -90,11 +90,100 @@ not need to be guarded with a critical section. */
 
 /* Scheduler utilities. */
 extern void vTaskSwitchContext( void );
-#define portYIELD() __asm volatile( "ecall" );
+#define portYIELD() __asm volatile( "li a7, 1; ecall" );
 #define portEND_SWITCHING_ISR( xSwitchRequired ) if( xSwitchRequired ) vTaskSwitchContext()
 #define portYIELD_FROM_ISR( x ) portEND_SWITCHING_ISR( x )
 /*-----------------------------------------------------------*/
 
+#if ( configENABLE_MPU == 1 )
+    extern void vRaisePrivilege( void );
+    extern BaseType_t xIsPrivileged( void ) /* __attribute__ (( naked )) */;
+    extern void vResetPrivilege( void ) /* __attribute__ (( naked )) */;
+#endif /* configENABLE_MPU */
+
+    #if ( configENABLE_MPU == 1 )
+        #define portUSING_MPU_WRAPPERS    1
+        #define portPRIVILEGE_BIT         ( 0x1UL << 11UL )
+/**
+ * @brief Checks whether or not the processor is privileged.
+ *
+ * @return 1 if the processor is already privileged, 0 otherwise.
+ */
+        #define portIS_PRIVILEGED()      xIsPrivileged()
+
+/**
+ * @brief Raise an ECALL request to raise privilege.
+ *
+ * The ECALL handler checks that the ECALL was raised from a system call and only
+ * then it raises the privilege. If this is called from any other place,
+ * the privilege is not raised.
+ */
+        #define portRAISE_PRIVILEGE()    vRaisePrivilege()
+
+/**
+ * @brief Lowers the privilege level by setting the bit 0 of the CONTROL
+ * register.
+ */
+        #define portRESET_PRIVILEGE()    vResetPrivilege()
+    #else
+        #define portPRIVILEGE_BIT         ( 0x0UL )
+        #define portIS_PRIVILEGED()
+        #define portRAISE_PRIVILEGE()
+        #define portRESET_PRIVILEGE()
+    #endif /* configENABLE_MPU */
+
+
+/* MPU regions. */
+    #define portPRIVILEGED_FLASH_REGION                   ( 0UL )
+    #define portUNPRIVILEGED_SYSCALLS_REGION              ( 1UL )
+    #define portUNPRIVILEGED_FLASH_REGION                 ( 2UL )
+    #define portUNPRIVILEGED_SRAM_REGION                  ( 3UL )
+    #define portFIRST_CONFIGURABLE_REGION                 ( 4UL )
+    #define portLAST_CONFIGURABLE_REGION                  ( 6UL )
+    #define portNUM_CONFIGURABLE_REGIONS                  ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
+    #define portTOTAL_NUM_REGIONS                         ( portNUM_CONFIGURABLE_REGIONS + 1)   /* Plus one to make space for the stack region. */
+
+/* Attributes used in pmpxcfg registers. */
+    #define portMPU_REGION_PRIVILEGED_READ_WRITE          ( ( 1UL << 7UL ) | 3UL )
+    #define portMPU_REGION_PRIVILEGED_READ_ONLY           ( ( 1UL << 7UL ) | 1UL )
+    #define portMPU_REGION_READ_WRITE                     ( 3UL )
+    #define portMPU_REGION_READ_ONLY                      ( 1UL )
+    #define portMPU_REGION_EXECUTE                        ( 4UL )
+    #define portMPU_REGION_TOR                            ( 1UL << 3UL )
+    #define portMPU_REGION_ADDRESS_SHIFT                  ( 2UL )
+
+/*-----------------------------------------------------------*/
+
+/**
+ * @brief Settings to define an MPU region.
+ */
+    typedef struct MPURegionSettings
+    {
+        size_t  base; /**< pmpaddr/base for the region. */
+        size_t  top;  /**< pmpaddr/top  for the region. */
+    } MPURegionSettings_t;
+
+/**
+ * @brief MPU settings as stored in the TCB.
+ */
+    typedef struct MPU_SETTINGS
+    {
+        size_t xIsPrivileged;
+        size_t pmpcfg2;  /**< pmpcfg2 for the task containing attributes for all the 2/4 per task regions. */
+#if __riscv_xlen == 32
+        size_t pmpcfg3;  /**< pmpcfg3 for the task containing attributes for the remaining 2 per task regions. */
+#endif
+        MPURegionSettings_t xRegionsSettings[ portTOTAL_NUM_REGIONS ]; /**< Settings for 4 per task regions. */
+    } xMPU_SETTINGS;
+/*-----------------------------------------------------------*/
+
+/**
+ * @brief ECALL numbers.
+ */
+    #define portECALL_YIELD                      1
+    #define portECALL_START_SCHEDULER            2
+    #define portECALL_RAISE_PRIVILEGE            3
+/*-----------------------------------------------------------*/
 
 /* Critical section management. */
 #define portCRITICAL_NESTING_IN_TCB					1

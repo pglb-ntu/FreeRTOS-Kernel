@@ -122,6 +122,14 @@ void *pvAlmightyCodeCap;
 #define COMPARTMENT_RETURN_OTYPE (configCOMPARTMENTS_NUM - 1)
 #endif
 
+#if ( configENABLE_MPU == 1 )
+
+/**
+ * @brief Setup the Memory Protection Unit (MPU).
+ */
+    static void prvSetupMPU( void ) PRIVILEGED_FUNCTION;
+#endif /* configENABLE_MPU */
+
 /*
  * Setup the timer to generate the tick interrupts.  The implementation in this
  * file is weak to allow application writers to change the timer used to
@@ -158,6 +166,96 @@ task stack, not the ISR stack). */
 	#define portCHECK_ISR_STACK()
 #endif /* configCHECK_FOR_STACK_OVERFLOW > 2 */
 
+/*-----------------------------------------------------------*/
+
+#if ( configENABLE_MPU == 1 )
+    static void prvSetupMPU( void ) /* PRIVILEGED_FUNCTION */
+    {
+        extern size_t __privileged_functions_start__[];
+        extern size_t __privileged_functions_end__[];
+        extern size_t __privileged_data_start__[];
+        extern size_t __privileged_data_end__[];
+        extern size_t __syscalls_flash_start__[];
+        extern size_t __syscalls_flash_end__[];
+        extern size_t __unprivileged_flash_start__[];
+        extern size_t __unprivileged_flash_end__[];
+        extern size_t __unprivileged_sram_start__[];
+        extern size_t __unprivileged_sram_end__[];
+
+        size_t pmpaddr0 = 0, pmpaddr1 = 0, pmpaddr2 = 0, pmpaddr3 = 0, pmpaddr4 = 0,
+               pmpaddr5 = 0, pmpaddr6 = 0, pmpaddr7 = 0;
+        size_t pmpcfg0 = 0;
+        size_t pmpcfg1 = 0;
+
+        pmpaddr0 = (size_t)&__privileged_functions_start__>> portMPU_REGION_ADDRESS_SHIFT;
+        pmpaddr1 = (size_t)&__privileged_functions_end__ >> portMPU_REGION_ADDRESS_SHIFT;
+
+        // syscall base and bounds
+        pmpaddr2 = (size_t)&__syscalls_flash_start__ >> portMPU_REGION_ADDRESS_SHIFT;
+        pmpaddr3 = (size_t)&__syscalls_flash_end__ >> portMPU_REGION_ADDRESS_SHIFT;
+
+        // unprivileged_flash base and bounds
+        pmpaddr4 = (size_t)&__unprivileged_flash_start__ >> portMPU_REGION_ADDRESS_SHIFT;
+        pmpaddr5 = (size_t)&__unprivileged_flash_end__ >> portMPU_REGION_ADDRESS_SHIFT;
+
+        // unprivileged_flash base and bounds
+        pmpaddr6 = (size_t)&__unprivileged_sram_start__ >> portMPU_REGION_ADDRESS_SHIFT;
+        pmpaddr7 = (size_t)&__unprivileged_sram_end__ >> portMPU_REGION_ADDRESS_SHIFT;
+
+        pmpcfg0 |= portMPU_REGION_TOR << 8; // protect privileged_functions
+
+        printf("PMP static region: __privileged_functions <0x%x:0x%x>\n",
+            (unsigned) pmpaddr0 << portMPU_REGION_ADDRESS_SHIFT,
+            (unsigned) pmpaddr1 << portMPU_REGION_ADDRESS_SHIFT);
+        printf("PMP static region: __syscalls_flash <0x%x:0x%x>\n",
+            (unsigned) pmpaddr2 << portMPU_REGION_ADDRESS_SHIFT,
+            (unsigned) pmpaddr3 << portMPU_REGION_ADDRESS_SHIFT);
+        printf("PMP static region: __unprivileged_flash <0x%x:0x%x>\n",
+            (unsigned) pmpaddr4 << portMPU_REGION_ADDRESS_SHIFT,
+            (unsigned) pmpaddr5 << portMPU_REGION_ADDRESS_SHIFT);
+        printf("PMP static region: __unprivileged_sram <0x%x:0x%x>\n",
+            (unsigned) pmpaddr6 << portMPU_REGION_ADDRESS_SHIFT,
+            (unsigned) pmpaddr7 << portMPU_REGION_ADDRESS_SHIFT);
+
+        pmpcfg0 |= (portMPU_REGION_TOR | portMPU_REGION_READ_ONLY | portMPU_REGION_EXECUTE) << 24;  // Allow syscalls
+
+#if __riscv_xlen == 32
+        pmpcfg1 |= (portMPU_REGION_TOR | portMPU_REGION_READ_ONLY | portMPU_REGION_EXECUTE) << 8;  // Allow user code
+        pmpcfg1 |= (portMPU_REGION_TOR  | portMPU_REGION_READ_WRITE) << 24;                        // Allow user data
+#else
+        pmpcfg0 |= (portMPU_REGION_TOR | portMPU_REGION_READ_ONLY | portMPU_REGION_EXECUTE) << 40;  // Allow user code
+        pmpcfg0 |= (portMPU_REGION_TOR | portMPU_REGION_READ_WRITE) << 56;                          // Allow user data
+#endif
+
+        asm volatile(
+            "csrw pmpaddr0, %0\t\n"
+            "csrw pmpaddr1, %1\t\n"
+            "csrw pmpaddr2, %2\t\n"
+            "csrw pmpaddr3, %3\t\n"
+            "csrw pmpaddr4, %4\t\n"
+            "csrw pmpaddr5, %5\t\n"
+            "csrw pmpaddr6, %6\t\n"
+            "csrw pmpaddr7, %7\t\n"
+            "csrw pmpcfg0, %8\t\n"
+#if __riscv_xlen == 32
+            "csrw pmpcfg1, %9\t\n"
+#endif
+            :
+            : "r"(pmpaddr0),
+              "r"(pmpaddr1),
+              "r"(pmpaddr2),
+              "r"(pmpaddr3),
+              "r"(pmpaddr4),
+              "r"(pmpaddr5),
+              "r"(pmpaddr6),
+              "r"(pmpaddr7),
+
+              "r"(pmpcfg0),
+              "r"(pmpcfg1)
+            :
+        );
+    }
+#endif /* configENABLE_MPU */
 /*-----------------------------------------------------------*/
 
 #if( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIMECMP_BASE_ADDRESS != 0 )
@@ -224,6 +322,114 @@ task stack, not the ISR stack). */
 	#endif
 #endif
 
+#if ( configENABLE_MPU == 1 )
+    void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
+                                    const struct xMEMORY_REGION * const xRegions,
+                                    StackType_t * pxBottomOfStack,
+                                    uint32_t ulStackDepth )
+    {
+        intptr_t ulRegionStartAddress, ulRegionEndAddress, ulRegionNumber = 0;
+        int32_t lIndex = 0;
+        uint8_t cfg = 0;
+
+       xMPUSettings->pmpcfg2 = 0;
+#if __riscv_xlen == 32
+       xMPUSettings->pmpcfg3 = 0;
+#endif
+
+        /* This function is called automatically when the task is created - in
+         * which case the stack region parameters will be valid.  At all other
+         * times the stack parameters will not be valid and it is assumed that
+         * the stack region has already been configured. */
+        if( ulStackDepth > 0 )
+        {
+            ulRegionStartAddress = ( uintptr_t ) pxBottomOfStack;
+            ulRegionEndAddress = ( uintptr_t ) pxBottomOfStack + ( ulStackDepth * ( size_t ) sizeof( StackType_t ) ) - 1;
+
+            /* Define the region that allows access to the stack. */
+            xMPUSettings->xRegionsSettings[ 0 ].base = ulRegionStartAddress >> portMPU_REGION_ADDRESS_SHIFT;
+            xMPUSettings->xRegionsSettings[ 0 ].top = ulRegionEndAddress >> portMPU_REGION_ADDRESS_SHIFT;
+
+#if (DEBUG == 1)
+            printf("PMP task region #0: <0x%x:0x%x>\n",
+                   xMPUSettings->xRegionsSettings[ 0 ].top << portMPU_REGION_ADDRESS_SHIFT,
+                   xMPUSettings->xRegionsSettings[ 0 ].base << portMPU_REGION_ADDRESS_SHIFT);
+#endif
+
+            xMPUSettings->pmpcfg2 = (portMPU_REGION_TOR | portMPU_REGION_READ_WRITE) << 8;
+        }
+
+        /* User supplied configurable regions. */
+        for( ulRegionNumber = 1; ulRegionNumber <= portNUM_CONFIGURABLE_REGIONS; ulRegionNumber++ )
+        {
+            /* Only use PMP TOR mode for maximum granularity */
+            cfg = portMPU_REGION_TOR;
+
+            /* If xRegions is NULL i.e. the task has not specified any MPU
+             * region, the else part ensures that all the configurable MPU
+             * regions are invalidated. */
+            if( ( xRegions != NULL ) && ( xRegions[ lIndex ].ulLengthInBytes > 0UL ) )
+            {
+                /* Translate the generic region definition contained in xRegions
+                 * into the ARMv8 specific MPU settings that are then stored in
+                 * xMPUSettings. */
+                ulRegionStartAddress = ( ( uintptr_t ) xRegions[ lIndex ].pvBaseAddress );
+                ulRegionEndAddress = ( uintptr_t ) xRegions[ lIndex ].pvBaseAddress + xRegions[ lIndex ].ulLengthInBytes - 1;
+
+                /* Start address. */
+                xMPUSettings->xRegionsSettings[ ulRegionNumber ].base = ulRegionStartAddress >> portMPU_REGION_ADDRESS_SHIFT;
+
+                /* RO/RW. */
+                if( ( xRegions[ lIndex ].ulParameters & tskMPU_REGION_READ_ONLY ) != 0 )
+                {
+                    cfg |= ( portMPU_REGION_READ_ONLY );
+                }
+                else
+                {
+                    cfg |= ( portMPU_REGION_READ_WRITE );
+                }
+
+                /* Execute */
+                if( ( xRegions[ lIndex ].ulParameters & tskMPU_REGION_EXECUTE_NEVER ) == 0 )
+                {
+                    cfg |= ( portMPU_REGION_EXECUTE );
+                }
+
+                /* End Address. */
+                xMPUSettings->xRegionsSettings[ ulRegionNumber ].top = ulRegionEndAddress >> portMPU_REGION_ADDRESS_SHIFT;
+
+            }
+            else
+            {
+                /* Invalidate the region. */
+                xMPUSettings->xRegionsSettings[ ulRegionNumber ].top  = 0UL;
+                xMPUSettings->xRegionsSettings[ ulRegionNumber ].base = 0UL;
+                cfg = 0;
+            }
+
+           size_t shift = ((ulRegionNumber * 2) + 1) * 8;
+#if __riscv_xlen == 32
+           if (ulRegionNumber >= 2) {
+               shift -=32;
+               xMPUSettings->pmpcfg3 |= cfg << shift;
+           } else {
+               xMPUSettings->pmpcfg2 |= cfg << shift;
+           }
+#else
+           xMPUSettings->pmpcfg2 |= cfg << shift;
+#endif
+            lIndex++;
+
+#if (DEBUG == 1)
+            printf("PMP task region #%d: <0x%x:0x%x>\n", ulRegionNumber,
+                   xMPUSettings->xRegionsSettings[ ulRegionNumber ].top << portMPU_REGION_ADDRESS_SHIFT,
+                   xMPUSettings->xRegionsSettings[ ulRegionNumber ].base << portMPU_REGION_ADDRESS_SHIFT);
+#endif
+        }
+    }
+#endif /* configENABLE_MPU */
+/*-----------------------------------------------------------*/
+
 BaseType_t xPortStartScheduler( void )
 {
 extern void xPortStartFirstTask( void );
@@ -249,6 +455,13 @@ extern void xPortStartFirstTask( void );
 		#endif	 /* configISR_STACK_SIZE_WORDS */
 	}
 	#endif /* configASSERT_DEFINED */
+
+    #if ( configENABLE_MPU == 1 )
+        {
+            /* Setup the Memory Protection Unit (MPU). */
+            prvSetupMPU();
+        }
+    #endif /* configENABLE_MPU */
 
 	/* If there is a CLINT then it is ok to use the default implementation
 	in this file, otherwise vPortSetupTimerInterrupt() must be implemented to

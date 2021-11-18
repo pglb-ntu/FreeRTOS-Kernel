@@ -62,7 +62,53 @@
 	.endm
 
 .macro portasmRESTORE_ADDITIONAL_REGISTERS
-	/* No additional registers to restore, so this macro does nothing. */
+#if (configENABLE_MPU == 1)
+#if __riscv_xlen == 64
+	#define portWORD_SIZE 8
+	#define store_x sd
+	#define load_x ld
+#elif __riscv_xlen == 32
+	#define store_x sw
+	#define load_x lw
+	#define portWORD_SIZE 4
+#else
+	#error Assembler did not define __riscv_xlen
+#endif
+    la      t1, pxCurrentTCB            /* Load pxCurrentTCB. */
+    load_x  t1, 0(t1)
+    addi    t0, t1, 3*portWORD_SIZE
+#if __riscv_xlen == 32
+    addi    t0, t0, portWORD_SIZE
+#endif
+
+    load_x  t2, 0*portWORD_SIZE( t0 )
+    load_x  t3, 1*portWORD_SIZE( t0 )
+    csrw    pmpaddr8, t2
+    csrw    pmpaddr9, t3
+
+    load_x  t2, 2*portWORD_SIZE( t0 )
+    load_x  t3, 3*portWORD_SIZE( t0 )
+    csrw    pmpaddr10, t2
+    csrw    pmpaddr11, t3
+
+    load_x  t2, 4*portWORD_SIZE( t0 )
+    load_x  t3, 5*portWORD_SIZE( t0 )
+    csrw    pmpaddr12, t2
+    csrw    pmpaddr13, t3
+
+    load_x  t2, 6*portWORD_SIZE( t0 )
+    load_x  t3, 7*portWORD_SIZE( t0 )
+    csrw    pmpaddr14, t2
+    csrw    pmpaddr15, t3
+
+    load_x  t2, 2*portWORD_SIZE( t1 )
+    csrw    pmpcfg2, t2
+
+#if __riscv_xlen == 32
+    load_x  t2, 3*portWORD_SIZE( t1 )
+    csrw    pmpcfg3, t2
+#endif
+#endif
 	.endm
 
 #endif /* __FREERTOS_RISC_V_EXTENSIONS_H__ */
