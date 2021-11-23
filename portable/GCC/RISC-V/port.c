@@ -456,7 +456,7 @@ extern void xPortStartFirstTask( void );
 	}
 	#endif /* configASSERT_DEFINED */
 
-    #if ( configENABLE_MPU == 1 )
+    #if ( configENABLE_MPU == 1 && configMPU_COMPARTMENTALIZATION == 0 )
         {
             /* Setup the Memory Protection Unit (MPU). */
             prvSetupMPU();

@@ -99,6 +99,9 @@ portasmRESTORE_ADDITIONAL_REGISTERS macros - which can be defined in a chip
 specific version of freertos_risc_v_chip_specific_extensions.h.  See the notes
 at the top of this file. */
 #define portCONTEXT_SIZE ( 30 * portWORD_SIZE )
+#ifdef configMPU_COMPARTMENTALIZATION
+#define portCOMPARTMENT_CONTEXT_SIZE (17 * portWORD_SIZE)
+#endif
 
 .global xPortStartFirstTask
 .global freertos_risc_v_trap_handler
@@ -122,8 +125,19 @@ at the top of this file. */
 .global xIsPrivileged
 .global vRaisePrivilege
 .global vResetPrivilege
-#endif
+/*-----------------------------------------------------------*/
 
+#if (configMPU_COMPARTMENTALIZATION == 1)
+.global xPortGetCurrentCompartmentID
+.global xPortGetCurrentCompartmentStack
+.global xPortGetCurrentCompartmentReturn
+.global xPortCompartmentTrampSetup
+.global xPortCompartmentEnterTrampoline
+.global xPortCompartmentEnterTrampolineEnd
+.global vSetupMPUPerComp
+
+#endif
+#endif
 /*-----------------------------------------------------------*/
 
 .section privileged_functions, "wax", @progbits
@@ -264,8 +278,11 @@ mmode:
 #if (configENABLE_MPU == 1)
 	li   t1, 1                          /* yield syscall number */
 	beq  a7, t1, yield
+	li   t1, 4                          /* comp MPU reconfig */
+	beq  a7, t1, 1f
 	li   t1, 3                          /* raise priv syscall number */
 	bne  a7, t1, is_exception
+1:
 	j processed_source
 #endif
 yield:
@@ -287,6 +304,11 @@ as_yet_unhandled:
 processed_source:
 	la      t1, pxCurrentTCB			/* Load pxCurrentTCB. */
 	load_x  t1, 0(t1)
+
+#if (configMPU_COMPARTMENTALIZATION == 1)
+	csrw    mscratch, t1
+#endif
+
 	load_x  sp, 0( t1 )				 	/* Read sp from first TCB member. */
 
 	/* Load mret with the address of the next instruction in the task to run next. */
@@ -345,6 +367,11 @@ xPortStartFirstTask:
 
 	la      t0, pxCurrentTCB			/* Load pxCurrentTCB. */
 	load_x  t0, 0( t0 )
+
+#if (configMPU_COMPARTMENTALIZATION == 1)
+	csrw    mscratch, t0
+#endif
+
 	load_x  sp, 0( t0 )				 	/* Read sp from first TCB member. */
 
 	load_x  x1, 0( sp ) /* Note for starting the scheduler the exception return address is used as the function return address. */
@@ -474,9 +501,11 @@ chip_specific_stack_frame:				/* First add any chip specific registers to the st
 	slli t1, t1, 4
 
 #if (configENABLE_MPU == 1)
+#if (configMPU_COMPARTMENTALIZATION == 0)
 	bnez a3, 2f
 	li   t2, ~0x1800
 	and  t1, t1, t2
+#endif
 #endif
 2:
 	or   t0, t0, t1						/* Set MPIE and MPP bits in mstatus value. */
@@ -505,7 +534,11 @@ xIsPrivileged:
 	la      t1, pxCurrentTCB			/* Load pxCurrentTCB. */
 	load_x  t1, 0(t1)
 	beqz    t1, 1f
+#if (configMPU_COMPARTMENTALIZATION == 0)
 	load_x  a0, 1*portWORD_SIZE( t1 ) 	/* Read xMPUSettings->xIsPrivileged from second TCB member. */
+#else
+	mv      a0, x0
+#endif
 1:
 	ret
 /*-----------------------------------------------------------*/
@@ -521,15 +554,270 @@ vRaisePrivilege:
 .align 8
 .type vResetPrivilege, @function
 vResetPrivilege:
+#if (configMPU_COMPARTMENTALIZATION == 0)
 	la      t1, pxCurrentTCB			/* Load pxCurrentTCB. */
 	load_x  t1, 0(t1)
 	load_x  a0, 1*portWORD_SIZE( t1 ) 	/* Read xMPUSettings->xIsPrivileged from second TCB member. */
 	beqz   a0, reset
+#endif
 	ret
 reset:
 	csrw mepc, ra
 	li   t0, (3 << 11)
 	csrc mstatus, t0
 	mret
+
+#if (configMPU_COMPARTMENTALIZATION == 1)
+.section privileged_functions, "wax", @progbits
+
+.macro getCurrentPerTCBCompartment reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 2 * portWORD_SIZE(\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro getCurrentPerTCBCompartmentStack reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return) # Read return stack from second xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro getCurrentPerTCBCompartmentReturn reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 0 * portWORD_SIZE(\reg_return) # Read return cap from xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro saveCurrentPerTCBCompartmentContext reg_temp, reg_temp2, compid, ret_cap
+	# Increase compartment stack level and store it to point to the current compartment context
+	csrr              \reg_temp2, mscratch
+	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+	addi              \reg_temp, \reg_temp, (portCOMPARTMENT_CONTEXT_SIZE)
+	store_x           \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+
+	# Save return compartment address (to use upon a per-compartment fault)
+	store_x           \ret_cap, 0 * portWORD_SIZE(\reg_temp)
+	# Save the caller's stack
+	store_x           sp, 1 * portWORD_SIZE(\reg_temp)
+
+	# Save new/current compid
+	store_x               \compid, 2 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+
+	/* Save cgp into the caller's context */
+	store_x gp, 3 * portWORD_SIZE(\reg_temp)
+
+	/* Save cra into the caller's context */
+	store_x ra, 4 * portWORD_SIZE(\reg_temp)
+
+	/* Save callee-saved context */
+	store_x s0, 5 * portWORD_SIZE(\reg_temp)
+	store_x s1, 6 * portWORD_SIZE(\reg_temp)
+	store_x s2, 7 * portWORD_SIZE(\reg_temp)
+	store_x s3, 8 * portWORD_SIZE(\reg_temp)
+	store_x s4, 9 * portWORD_SIZE(\reg_temp)
+	store_x s5, 10 * portWORD_SIZE(\reg_temp)
+	store_x s6, 11 * portWORD_SIZE(\reg_temp)
+	store_x s7, 12 * portWORD_SIZE(\reg_temp)
+	store_x s8, 13 * portWORD_SIZE(\reg_temp)
+	store_x s9, 14 * portWORD_SIZE(\reg_temp)
+	store_x s10, 15 * portWORD_SIZE(\reg_temp)
+	store_x s11, 16 * portWORD_SIZE(\reg_temp)
+.endm
+/*-----------------------------------------------------------*/
+
+.macro restorePerTCBCompartmentContext reg_temp, reg_temp2
+	csrr              \reg_temp2, mscratch
+	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+
+	load_x gp, 3 * portWORD_SIZE(\reg_temp)
+
+	/* Setup the new compartment's MPU regions */
+	mv t2, gp
+	la t4, vSetupMPUPerComp
+	jalr t4
+
+	load_x ra, 4 * portWORD_SIZE(\reg_temp)
+
+	/* Restore callee-saved context */
+	load_x s0, 5 * portWORD_SIZE(\reg_temp)
+	load_x s1, 6 * portWORD_SIZE(\reg_temp)
+	load_x s2, 7 * portWORD_SIZE(\reg_temp)
+	load_x s3, 8 * portWORD_SIZE(\reg_temp)
+	load_x s4, 9 * portWORD_SIZE(\reg_temp)
+	load_x s5, 10 * portWORD_SIZE(\reg_temp)
+	load_x s6, 11 * portWORD_SIZE(\reg_temp)
+	load_x s7, 12 * portWORD_SIZE(\reg_temp)
+	load_x s8, 13 * portWORD_SIZE(\reg_temp)
+	load_x s9, 14 * portWORD_SIZE(\reg_temp)
+	load_x s10, 15 * portWORD_SIZE(\reg_temp)
+	load_x s11, 16 * portWORD_SIZE(\reg_temp)
+
+	# Decrease compartment stack level and store it to point to the caller's compartment context
+	addi              \reg_temp, \reg_temp, -(portCOMPARTMENT_CONTEXT_SIZE)
+	store_x           \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
+.endm
+
+/* BaseType_t xPortGetCurrentCompartmentID( void ) PRIVILEGED_FUNCTION; */
+.align 8
+.type xPortGetCurrentCompartmentID, %function
+xPortGetCurrentCompartmentID:
+	getCurrentPerTCBCompartment a0
+	ret
+.size xPortGetCurrentCompartmentID, . - xPortGetCurrentCompartmentID
+/*-----------------------------------------------------------*/
+
+/* uintcap_t xPortGetCurrentCompartmentStack( void ) PRIVILEGED_FUNCTION; */
+.align 8
+.type xPortGetCurrentCompartmentStack, %function
+xPortGetCurrentCompartmentStack:
+	getCurrentPerTCBCompartmentStack a0
+	ret
+.size xPortGetCurrentCompartmentStack, . - xPortGetCurrentCompartmentStack
+/*-----------------------------------------------------------*/
+
+/* uintcap_t xPortGetCurrentCompartmentReturn( void ) PRIVILEGED_FUNCTION; */
+.align 8
+.type xPortGetCurrentCompartmentReturn, %function
+xPortGetCurrentCompartmentReturn:
+	getCurrentPerTCBCompartmentReturn a0
+	ret
+.size xPortGetCurrentCompartmentReturn, . - xPortGetCurrentCompartmentReturn
+/*-----------------------------------------------------------*/
+
+.balign 16
+.type xPortCompartmentTrampSetup, %function
+xPortCompartmentTrampSetup:
+.Lfunc:      .zero portWORD_SIZE
+.Lcaptable:  .zero portWORD_SIZE
+.Ltramp:     .zero portWORD_SIZE
+.Lnum_regions: .zero portWORD_SIZE
+setup_regs:
+	.option push
+	.option norvc
+	addi t0, x0, configCOMPARTMENTS_NUM - 1
+	.option pop
+	la      t2, .Lfunc
+	load_x  t1, 2*portWORD_SIZE(t2)
+	jr      t1
+.size xPortCompartmentTrampSetup, . - xPortCompartmentTrampSetup
+/*-----------------------------------------------------------*/
+
+/* BaseType_t xPortCompartmentEnterTrampoline PRIVILEGED_FUNCTION; */
+.balign 16
+.type xPortCompartmentEnterTrampoline, %function
+xPortCompartmentEnterTrampoline:
+	# Assume t2 is the start address of the metadata, and t0 has the dest compid
+	# Load func
+	load_x t1, 0(t2)
+
+	# Load region count
+	load_x x4, (3 * portWORD_SIZE) (t2)
+
+	# Load captable
+	load_x t2, (1 * portWORD_SIZE) (t2)
+
+	/* Enter a critical section setting the new compartment context */
+	csrrc t3, mstatus, 8 // Disable interrupts
+	la    t4, compartment_return
+	saveCurrentPerTCBCompartmentContext t5, t6, t0, t4
+
+	/* Set the new compartment's cgp */
+	la t4, vSetupMPUPerComp
+	jalr t4
+
+	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
+	/* Exit critical section */
+
+#if 0
+	mv             x18, x0
+	mv             x19, x0
+	mv             x20, x0
+	mv             x21, x0
+	mv             x22, x0
+	mv             x23, x0
+	mv             x24, x0
+	mv             x25, x0
+	mv             x26, x0
+	mv             x27, x0
+	mv             x28, x0
+	mv             x29, x0
+	mv             x30, x0
+	mv             x31, x0
+#endif
+
+	/* Beyond this point, we are now in a new compartment */
+
+	/* ------------------- */
+
+compartment_call:
+	/* GO! */
+	jalr     ra, t1
+
+	/* ------------------- */
+
+compartment_return:
+	/* Enter a critical section setting the old compartment context */
+	csrrc t3, mstatus, 8 // Disable interrupts
+	/* Compartment returned, retrieve caller's state */
+	restorePerTCBCompartmentContext t0, t1
+	csrw  mstatus, t3 // Retrieve previous mstatus pre-critical section
+	/* Exit critical section */
+
+	ret
+xPortCompartmentEnterTrampolineEnd:
+.size xPortCompartmentEnterTrampoline, . - xPortCompartmentEnterTrampoline
+/*-----------------------------------------------------------*/
+.align 8
+.type vSetupMPUPerComp, @function
+vSetupMPUPerComp:
+    # t2 has the captable/mpu base address regions
+    # x4 has the number of regions
+	mv     t6, a7
+	li     a7, 4
+	ecall
+	mv     a7, t6
+
+	li     t5, configMPU_REGIONS_NUM
+
+	# Zero previous compartments MPU regions context
+zero:
+    beqz   t5, 1f
+	csrw   pmpaddr0, x0
+	addi   t5, t5, -1
+	j      zero
+1:
+
+	# Reconfigure the MPU with the new compartment regions addresses/bounds
+	mv      t5, x4
+loop_addrs:
+    beqz   t5, 1f
+	load_x t4, (t2)
+	csrw   pmpaddr0, t4
+	addi   t5, t5, -1
+	addi   t2, t2, portWORD_SIZE
+	j      loop_addrs
+1:
+
+	#Note Emulate if the MPU has more N regions, we need to configure N / size_t CSR registers
+	mv      t5, x4
+#if __riscv_xlen == 32
+	srli    t5, t5, 2
+#else
+	srli    t5, t5, 3
+#endif
+loop_configs:
+	beqz   t5, 1f
+	# Load config values
+	load_x t4, -(portWORD_SIZE) (t2)
+	csrw   pmpcfg0, x0
+	addi   t5, t5, -1
+	j      loop_configs
+
+1:
+	ret
+#endif
 #endif
 /*-----------------------------------------------------------*/

@@ -289,6 +289,15 @@ typedef struct {
 } xCOMPARTMENT_CONTEXT;
 #endif
 
+#if (configMPU_COMPARTMENTALIZATION == 1)
+typedef struct {
+    volatile size_t       pxReturnCap;
+    volatile size_t       pxReturnStack;
+    volatile size_t       xCompID;
+    size_t                callee_saved[14];
+} xCOMPARTMENT_CONTEXT;
+#endif
+
 /*
  * Install a RISC-V exception handler to be optionally used if
  * configPORT_ALLOW_APP_EXCEPTION_HANDLERS is set to one.
