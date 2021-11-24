@@ -596,6 +596,10 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB ) PRIVILEGED_FUNCTION;
         configASSERT( puxStackBuffer != NULL );
         configASSERT( pxTaskBuffer != NULL );
 
+        #if ( portUSING_MPU_WRAPPERS == 1 )
+            uxPriority |= portPRIVILEGE_BIT; /* Run the task in privileged mode by default */
+        #endif
+
         #if ( configASSERT_DEFINED == 1 )
             {
                 /* Sanity check that the size of the structure used to declare a
@@ -744,6 +748,10 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB ) PRIVILEGED_FUNCTION;
     {
         TCB_t * pxNewTCB;
         BaseType_t xReturn;
+
+        #if ( portUSING_MPU_WRAPPERS == 1 )
+            uxPriority |= portPRIVILEGE_BIT; /* Run the task in privileged mode by default */
+        #endif
 
         /* If the stack grows down then allocate the stack then the TCB so the stack
          * does not grow into the TCB.  Likewise if the stack grows up then allocate
