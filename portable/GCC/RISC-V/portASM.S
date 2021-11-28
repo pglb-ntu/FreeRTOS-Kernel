@@ -781,7 +781,7 @@ vSetupMPUPerComp:
     # x4 has the number of regions
 	mv     t6, a7
 	li     a7, 4
-	ecall
+	# ecall
 	mv     a7, t6
 
 	li     t5, configMPU_REGIONS_NUM
