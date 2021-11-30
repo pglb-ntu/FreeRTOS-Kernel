@@ -125,6 +125,10 @@ at the top of this file. */
 	.extern configTASK_RETURN_ADDRESS
 #endif /* configTASK_RETURN_ADDRESS */
 
+#if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
+	.extern vPortExceptionHandler
+#endif
+
 #if (configENABLE_MPU == 1)
 .global xIsPrivileged
 .global vRaisePrivilege
@@ -139,6 +143,27 @@ at the top of this file. */
 .global xPortCompartmentEnterTrampoline
 .global xPortCompartmentEnterTrampolineEnd
 .global vSetupMPUPerComp
+
+.macro getCurrentPerTCBCompartment reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 2 * portWORD_SIZE(\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro getCurrentPerTCBCompartmentStack reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return) # Read return stack from second xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
+
+.macro getCurrentPerTCBCompartmentReturn reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 0 * portWORD_SIZE(\reg_return) # Read return cap from xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
 
 #endif
 #endif
@@ -296,10 +321,40 @@ yield:
 	j processed_source
 
 is_exception:
-	csrr t0, mcause						/* For viewing in the debugger only. */
-	csrr t1, mepc						/* For viewing in the debugger only */
-	csrr t2, mstatus
-	j is_exception						/* No other exceptions handled yet. */
+	#csrr t0, mcause						/* For viewing in the debugger only. */
+	#csrr t1, mepc						/* For viewing in the debugger only */
+	#csrr t2, mstatus
+	#j is_exception						/* No other exceptions handled yet. */
+
+#if configPORT_ALLOW_APP_EXCEPTION_HANDLERS
+    /* a0 and a1 should already have mcause and mepcc,
+     * put exception frame in a2 as a third argument to vPortExceptionHandler. */
+	mv                a2, sp
+	la                t0, vPortExceptionHandler
+	jalr              ra, t0
+#if configMPU_COMPARTMENTALIZATION
+	beqz              a0, .Ltest_if_in_compartment /* Don't switch context if fault handler didn't block/unblock a task. */
+#else
+	beqz              a0, .Lbreak_on_exception /* Don't switch context if fault handler didn't block/unblock a task. */
+#endif
+	la                t0, vTaskSwitchContext
+	jalr              ra, t0
+	beq               zero, zero, processed_source
+#endif /* configPORT_ALLOW_APP_EXCEPTION_HANDLERS */
+
+#if configMPU_COMPARTMENTALIZATION
+.Ltest_if_in_compartment:
+	getCurrentPerTCBCompartment t0
+	li                t1, configCOMPARTMENTS_NUM - 1
+	bne               a0, t1, return_compartment
+#endif
+
+.Lbreak_on_exception:
+	csrr              t0, mcause /* For viewing in the debugger only. */
+	csrr              t1, mepc /* For viewing in the debugger only */
+	csrr              t2, mstatus
+	ebreak
+	j                 .Lbreak_on_exception
 
 as_yet_unhandled:
 	csrr t0, mcause						/* For viewing in the debugger only. */
@@ -356,6 +411,58 @@ processed_source:
 	addi sp, sp, portCONTEXT_SIZE + (portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
 
 	mret
+
+#if (configMPU_COMPARTMENTALIZATION == 1)
+return_compartment:
+	la                t0, pxCurrentTCB # Load cap to pxCurrentTCB.
+	load_x            t0, 0(t0) # Load pxCurrentTCB.
+	csrw              mscratch, t0
+
+	load_x  sp, 0( t0 )				 	/* Read sp from first TCB member. */
+
+	portasmRESTORE_ADDITIONAL_REGISTERS	/* Defined in freertos_risc_v_chip_specific_extensions.h to restore any registers unique to the RISC-V implementation. */
+
+	load_x            t0, 0 * portWORD_SIZE(sp)
+	csrw              mepc, t0 # Write mepc.
+
+	/* Load mstatus with the interrupt enable bits used by the task. */
+	load_x  t0, 29 * portWORD_SIZE( sp )
+	csrw mstatus, t0						/* Required for MPIE bit. */
+
+	load_x  x1, 1 * portWORD_SIZE( sp )
+	load_x  x5, 2 * portWORD_SIZE( sp )		/* t0 */
+	load_x  x6, 3 * portWORD_SIZE( sp )		/* t1 */
+	load_x  x7, 4 * portWORD_SIZE( sp )		/* t2 */
+	load_x  x8, 5 * portWORD_SIZE( sp )		/* s0/fp */
+	load_x  x9, 6 * portWORD_SIZE( sp )		/* s1 */
+	load_x  x10, 7 * portWORD_SIZE( sp )	/* a0 */
+	load_x  x11, 8 * portWORD_SIZE( sp )	/* a1 */
+	load_x  x12, 9 * portWORD_SIZE( sp )	/* a2 */
+	load_x  x13, 10 * portWORD_SIZE( sp )	/* a3 */
+	load_x  x14, 11 * portWORD_SIZE( sp )	/* a4 */
+	load_x  x15, 12 * portWORD_SIZE( sp )	/* a5 */
+	load_x  x16, 13 * portWORD_SIZE( sp )	/* a6 */
+	load_x  x17, 14 * portWORD_SIZE( sp )	/* a7 */
+	load_x  x18, 15 * portWORD_SIZE( sp )	/* s2 */
+	load_x  x19, 16 * portWORD_SIZE( sp )	/* s3 */
+	load_x  x20, 17 * portWORD_SIZE( sp )	/* s4 */
+	load_x  x21, 18 * portWORD_SIZE( sp )	/* s5 */
+	load_x  x22, 19 * portWORD_SIZE( sp )	/* s6 */
+	load_x  x23, 20 * portWORD_SIZE( sp )	/* s7 */
+	load_x  x24, 21 * portWORD_SIZE( sp )	/* s8 */
+	load_x  x25, 22 * portWORD_SIZE( sp )	/* s9 */
+	load_x  x26, 23 * portWORD_SIZE( sp )	/* s10 */
+	load_x  x27, 24 * portWORD_SIZE( sp )	/* s11 */
+	load_x  x28, 25 * portWORD_SIZE( sp )	/* t3 */
+	load_x  x29, 26 * portWORD_SIZE( sp )	/* t4 */
+	load_x  x30, 27 * portWORD_SIZE( sp )	/* t5 */
+	load_x  x31, 28 * portWORD_SIZE( sp )	/* t6 */
+	addi sp, sp, portCONTEXT_SIZE + (portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
+
+	getCurrentPerTCBCompartmentStack sp
+
+	mret
+#endif
 /*-----------------------------------------------------------*/
 
 .align 8
@@ -573,27 +680,6 @@ reset:
 
 #if (configMPU_COMPARTMENTALIZATION == 1)
 .section privileged_functions, "wax", @progbits
-
-.macro getCurrentPerTCBCompartment reg_return
-	csrr              \reg_return, mscratch
-	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
-	load_x            \reg_return, 2 * portWORD_SIZE(\reg_return) # Read xCompID from xCOMPARTMENT_CONTEXT.
-.endm
-/*-----------------------------------------------------------*/
-
-.macro getCurrentPerTCBCompartmentStack reg_return
-	csrr              \reg_return, mscratch
-	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
-	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return) # Read return stack from second xCOMPARTMENT_CONTEXT.
-.endm
-/*-----------------------------------------------------------*/
-
-.macro getCurrentPerTCBCompartmentReturn reg_return
-	csrr              \reg_return, mscratch
-	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
-	load_x            \reg_return, 0 * portWORD_SIZE(\reg_return) # Read return cap from xCOMPARTMENT_CONTEXT.
-.endm
-/*-----------------------------------------------------------*/
 
 .macro saveCurrentPerTCBCompartmentContext reg_temp, reg_temp2, compid, ret_cap
 	# Increase compartment stack level and store it to point to the current compartment context
