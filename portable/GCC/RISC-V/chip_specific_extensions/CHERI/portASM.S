@@ -385,6 +385,9 @@ test_if_environment_call:
 	li                t0, 11 /* 11 == environment call. */
 	bne               a0, t0, is_exception /* Not an M environment call, so some other exception. */
 
+	li                t0, 1
+	bne               t0, a7, is_exception
+
 	clgc              ct0, xISRStackTop # Switch to ISR stack before function call.
 	clc               csp, 0(ct0)
 
