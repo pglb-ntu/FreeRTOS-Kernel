@@ -104,7 +104,7 @@ specific version of freertos_risc_v_chip_specific_extensions.h.  See the notes
 at the top of this file. */
 #define portCONTEXT_SIZE ( 30 * portWORD_SIZE )
 #ifdef configMPU_COMPARTMENTALIZATION
-#define portCOMPARTMENT_CONTEXT_SIZE (17 * portWORD_SIZE)
+#define portCOMPARTMENT_CONTEXT_SIZE (18 * portWORD_SIZE)
 #endif
 
 .global xPortStartFirstTask
@@ -143,6 +143,13 @@ at the top of this file. */
 .global xPortCompartmentEnterTrampoline
 .global xPortCompartmentEnterTrampolineEnd
 .global vSetupMPUPerComp
+
+.macro getCurrentPerTCBCompartmentRegions reg_return
+	csrr              \reg_return, mscratch
+	load_x            \reg_return, 1 * portWORD_SIZE(\reg_return)
+	load_x            \reg_return, 3 * portWORD_SIZE(\reg_return) # Read xCompRegions from xCOMPARTMENT_CONTEXT.
+.endm
+/*-----------------------------------------------------------*/
 
 .macro getCurrentPerTCBCompartment reg_return
 	csrr              \reg_return, mscratch
@@ -346,7 +353,7 @@ is_exception:
 .Ltest_if_in_compartment:
 	getCurrentPerTCBCompartment t0
 	li                t1, configCOMPARTMENTS_NUM - 1
-	bne               a0, t1, return_compartment
+	bne               t0, t1, return_compartment
 #endif
 
 .Lbreak_on_exception:
@@ -366,6 +373,17 @@ processed_source:
 
 #if (configMPU_COMPARTMENTALIZATION == 1)
 	csrw    mscratch, t1
+
+	getCurrentPerTCBCompartment t0
+	li                t2, configCOMPARTMENTS_NUM - 1
+	beq               t0, t2, 1f
+
+	getCurrentPerTCBCompartmentRegions x4
+
+	la t2, vSetupMPUPerComp
+	jalr t2
+	csrr   t1, mscratch
+1:
 #endif
 
 	load_x  sp, 0( t1 )				 	/* Read sp from first TCB member. */
@@ -696,25 +714,28 @@ reset:
 	# Save new/current compid
 	store_x               \compid, 2 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
 
+	# Save new/current xCompRegions
+	store_x               x4, 3 * portWORD_SIZE(\reg_temp) # Store xCompID to xCOMPARTMENT_CONTEXT.
+
 	/* Save cgp into the caller's context */
-	store_x gp, 3 * portWORD_SIZE(\reg_temp)
+	store_x gp, 4 * portWORD_SIZE(\reg_temp)
 
 	/* Save cra into the caller's context */
-	store_x ra, 4 * portWORD_SIZE(\reg_temp)
+	store_x ra, 5 * portWORD_SIZE(\reg_temp)
 
 	/* Save callee-saved context */
-	store_x s0, 5 * portWORD_SIZE(\reg_temp)
-	store_x s1, 6 * portWORD_SIZE(\reg_temp)
-	store_x s2, 7 * portWORD_SIZE(\reg_temp)
-	store_x s3, 8 * portWORD_SIZE(\reg_temp)
-	store_x s4, 9 * portWORD_SIZE(\reg_temp)
-	store_x s5, 10 * portWORD_SIZE(\reg_temp)
-	store_x s6, 11 * portWORD_SIZE(\reg_temp)
-	store_x s7, 12 * portWORD_SIZE(\reg_temp)
-	store_x s8, 13 * portWORD_SIZE(\reg_temp)
-	store_x s9, 14 * portWORD_SIZE(\reg_temp)
-	store_x s10, 15 * portWORD_SIZE(\reg_temp)
-	store_x s11, 16 * portWORD_SIZE(\reg_temp)
+	store_x s0, 6 * portWORD_SIZE(\reg_temp)
+	store_x s1, 7 * portWORD_SIZE(\reg_temp)
+	store_x s2, 8 * portWORD_SIZE(\reg_temp)
+	store_x s3, 9 * portWORD_SIZE(\reg_temp)
+	store_x s4, 10 * portWORD_SIZE(\reg_temp)
+	store_x s5, 11 * portWORD_SIZE(\reg_temp)
+	store_x s6, 12 * portWORD_SIZE(\reg_temp)
+	store_x s7, 13 * portWORD_SIZE(\reg_temp)
+	store_x s8, 14 * portWORD_SIZE(\reg_temp)
+	store_x s9, 15 * portWORD_SIZE(\reg_temp)
+	store_x s10, 16 * portWORD_SIZE(\reg_temp)
+	store_x s11, 17 * portWORD_SIZE(\reg_temp)
 .endm
 /*-----------------------------------------------------------*/
 
@@ -722,28 +743,30 @@ reset:
 	csrr              \reg_temp2, mscratch
 	load_x            \reg_temp, 1 * portWORD_SIZE(\reg_temp2)
 
-	load_x gp, 3 * portWORD_SIZE(\reg_temp)
+	load_x gp, 4 * portWORD_SIZE(\reg_temp)
+
+	load_x x4, 3 * portWORD_SIZE(\reg_temp)
 
 	/* Setup the new compartment's MPU regions */
 	mv t2, gp
 	la t4, vSetupMPUPerComp
 	jalr t4
 
-	load_x ra, 4 * portWORD_SIZE(\reg_temp)
+	load_x ra, 5 * portWORD_SIZE(\reg_temp)
 
 	/* Restore callee-saved context */
-	load_x s0, 5 * portWORD_SIZE(\reg_temp)
-	load_x s1, 6 * portWORD_SIZE(\reg_temp)
-	load_x s2, 7 * portWORD_SIZE(\reg_temp)
-	load_x s3, 8 * portWORD_SIZE(\reg_temp)
-	load_x s4, 9 * portWORD_SIZE(\reg_temp)
-	load_x s5, 10 * portWORD_SIZE(\reg_temp)
-	load_x s6, 11 * portWORD_SIZE(\reg_temp)
-	load_x s7, 12 * portWORD_SIZE(\reg_temp)
-	load_x s8, 13 * portWORD_SIZE(\reg_temp)
-	load_x s9, 14 * portWORD_SIZE(\reg_temp)
-	load_x s10, 15 * portWORD_SIZE(\reg_temp)
-	load_x s11, 16 * portWORD_SIZE(\reg_temp)
+	load_x s0, 6 * portWORD_SIZE(\reg_temp)
+	load_x s1, 7 * portWORD_SIZE(\reg_temp)
+	load_x s2, 8 * portWORD_SIZE(\reg_temp)
+	load_x s3, 9 * portWORD_SIZE(\reg_temp)
+	load_x s4, 10 * portWORD_SIZE(\reg_temp)
+	load_x s5, 11 * portWORD_SIZE(\reg_temp)
+	load_x s6, 12 * portWORD_SIZE(\reg_temp)
+	load_x s7, 13 * portWORD_SIZE(\reg_temp)
+	load_x s8, 14 * portWORD_SIZE(\reg_temp)
+	load_x s9, 15 * portWORD_SIZE(\reg_temp)
+	load_x s10, 16 * portWORD_SIZE(\reg_temp)
+	load_x s11, 17 * portWORD_SIZE(\reg_temp)
 
 	# Decrease compartment stack level and store it to point to the caller's compartment context
 	addi              \reg_temp, \reg_temp, -(portCOMPARTMENT_CONTEXT_SIZE)

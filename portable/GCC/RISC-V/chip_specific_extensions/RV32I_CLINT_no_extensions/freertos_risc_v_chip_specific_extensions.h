@@ -62,7 +62,7 @@
 	.endm
 
 .macro portasmRESTORE_ADDITIONAL_REGISTERS
-#if (configENABLE_MPU == 1)
+#if (configENABLE_MPU == 1 && configMPU_COMPARTMENTALIZATION == 0)
 #if __riscv_xlen == 64
 	#define portWORD_SIZE 8
 	#define store_x sd

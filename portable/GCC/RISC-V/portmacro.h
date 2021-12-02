@@ -294,6 +294,7 @@ typedef struct {
     volatile size_t       pxReturnCap;
     volatile size_t       pxReturnStack;
     volatile size_t       xCompID;
+    volatile size_t       xCompRegions;
     size_t                callee_saved[14];
 } xCOMPARTMENT_CONTEXT;
 #endif
