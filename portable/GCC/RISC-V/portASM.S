@@ -380,8 +380,11 @@ processed_source:
 
 	getCurrentPerTCBCompartmentRegions x4
 
-	la t2, vSetupMPUPerComp
-	jalr t2
+	load_x            t2, 1 * portWORD_SIZE(t1)
+	load_x            t2, 4 * portWORD_SIZE(t2)
+2:
+	la t3, vSetupMPUPerComp
+	jalr t3
 	csrr   t1, mscratch
 1:
 #endif
@@ -830,7 +833,8 @@ xPortCompartmentEnterTrampoline:
 	load_x x4, (3 * portWORD_SIZE) (t2)
 
 	# Load captable
-	load_x t2, (1 * portWORD_SIZE) (t2)
+	load_x gp, (1 * portWORD_SIZE) (t2)
+	mv     t2, gp
 
 	/* Enter a critical section setting the new compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
