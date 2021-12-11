@@ -383,6 +383,7 @@ processed_source:
 	load_x            t2, 1 * portWORD_SIZE(t1)
 	load_x            t2, 4 * portWORD_SIZE(t2)
 2:
+	li t4, 1
 	la t3, vSetupMPUPerComp
 	jalr t3
 	csrr   t1, mscratch
@@ -891,12 +892,18 @@ xPortCompartmentEnterTrampolineEnd:
 .type vSetupMPUPerComp, @function
 vSetupMPUPerComp:
     # t2 has the captable/mpu base address regions
+    # t4 == 1 is reloaded from m-mode
     # x4 has the number of regions
+
+	# Skip ecall if reloading from a context switcher, otherwise syscall if from a user trampoline
+	li t5, 1
+	beq t4, t5, 1f
+
 	mv     t6, a7
 	li     a7, 4
-	# ecall
+	ecall
 	mv     a7, t6
-
+1:
 	li     t5, configMPU_REGIONS_NUM
 
 	# Zero previous compartments MPU regions context
