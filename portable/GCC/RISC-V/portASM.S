@@ -695,9 +695,19 @@ vResetPrivilege:
 #endif
 	ret
 reset:
+	# Set MPIE according to current MIE bit
+	csrr t1, mstatus
+	andi t0, t1, 0x1
+	slli t0, t0, 0x7
+
+	# Set MPP to usermode and disable interrupts
+	li   t2, ~0x1888
+	and  t1, t1, t2
+
+	# Write mstatus with MPIE, disable MIE, and MPP = usermode
+	or   t0, t1, t0
+	csrw mstatus, t0
 	csrw mepc, ra
-	li   t0, (3 << 11)
-	csrc mstatus, t0
 	mret
 
 #if (configMPU_COMPARTMENTALIZATION == 1)
