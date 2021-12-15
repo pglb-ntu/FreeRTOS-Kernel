@@ -374,6 +374,10 @@ processed_source:
 #if (configMPU_COMPARTMENTALIZATION == 1)
 	csrw    mscratch, t1
 
+	# Test if it's already an ecall to reconfigure the MPU
+	li      t0, 4
+	beq     a7, t0, 1f
+
 	getCurrentPerTCBCompartment t0
 	li                t2, configCOMPARTMENTS_NUM - 1
 	beq               t0, t2, 1f
