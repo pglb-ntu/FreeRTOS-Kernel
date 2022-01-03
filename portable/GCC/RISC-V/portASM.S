@@ -909,6 +909,13 @@ vSetupMPUPerComp:
     # t4 == 1 is reloaded from m-mode
     # x4 has the number of regions
 
+	# Skip a trap if called from an external interrupt and thus jumping to a device driver compartment
+	# in which case, we are already in m-mode
+	li    t6, 0xb
+	csrr  t5, mcause
+	and   t5, t5, t6
+	beq   t5, t6, 1f
+
 	# Skip ecall if reloading from a context switcher, otherwise syscall if from a user trampoline
 	li t5, 1
 	beq t4, t5, 1f
