@@ -261,6 +261,87 @@ static void prvInitialiseNewQueue( const UBaseType_t uxQueueLength,
     taskEXIT_CRITICAL()
 /*-----------------------------------------------------------*/
 
+#if (configCHERI_INT_MEMCPY >= 1)
+#include <_ansi.h>
+#include <stddef.h>
+#include <limits.h>
+#include <string.h>
+
+typedef long BLOCK_TYPE;
+
+/* Nonzero if either X or Y is not aligned on a "BLOCK_TYPE" boundary.  */
+#define UNALIGNED(X, Y) \
+  (((long)X & (sizeof (BLOCK_TYPE) - 1)) | ((long)Y & (sizeof (BLOCK_TYPE) - 1)))
+
+/* How many bytes are copied each iteration of the 4X unrolled loop.  */
+#define BIGBLOCKSIZE    (sizeof (BLOCK_TYPE) << 2)
+
+/* How many bytes are copied each iteration of the word copy loop.  */
+#define LITTLEBLOCKSIZE (sizeof (BLOCK_TYPE))
+
+/* Threshhold for punting to the byte copier.  */
+#define TOO_SMALL(LEN)  ((LEN) < BIGBLOCKSIZE)
+
+void* local_memcpy(void* dest, void* src, size_t size);
+void *
+local_memcpy (void *dst0,
+    void *src0,
+    size_t len0)
+{
+  char *dst = dst0;
+  const char *src = src0;
+  BLOCK_TYPE *aligned_dst;
+  const BLOCK_TYPE *aligned_src;
+
+  /* If the size is small, or either SRC or DST is unaligned,
+     then punt into the byte copy loop.  This should be rare.  */
+  if (!TOO_SMALL(len0) && !UNALIGNED (src, dst))
+    {
+      aligned_dst = (BLOCK_TYPE*)dst;
+      aligned_src = (BLOCK_TYPE*)src;
+
+      /* Copy 4X BLOCK_TYPE words at a time if possible.  */
+      while (len0 >= BIGBLOCKSIZE)
+        {
+          *aligned_dst++ = *aligned_src++;
+          *aligned_dst++ = *aligned_src++;
+          *aligned_dst++ = *aligned_src++;
+          *aligned_dst++ = *aligned_src++;
+          len0 -= BIGBLOCKSIZE;
+        }
+
+      /* Copy one BLOCK_TYPE word at a time if possible.  */
+      while (len0 >= LITTLEBLOCKSIZE)
+        {
+          *aligned_dst++ = *aligned_src++;
+          len0 -= LITTLEBLOCKSIZE;
+        }
+
+       /* Pick up any residual with a byte copier.  */
+      dst = (char*)aligned_dst;
+      src = (char*)aligned_src;
+    }
+
+  while (len0--)
+    *dst++ = *src++;
+
+  return dst;
+}
+
+/*
+void* local_memcpy(void* dest, void* src, size_t size) {
+    char* src_word = (char *) src;
+    char* dest_word = (char *) dest;
+
+    while( (unsigned) src_word < ((unsigned) src) + size ) {
+        *dest_word++ = *src_word++;
+    }
+
+    return dest;
+}*/
+#endif
+/*-----------------------------------------------------------*/
+
 BaseType_t xQueueGenericReset( QueueHandle_t xQueue,
                                BaseType_t xNewQueue )
 {
@@ -2153,7 +2234,12 @@ static BaseType_t prvCopyDataToQueue( Queue_t * const pxQueue,
     }
     else if( xPosition == queueSEND_TO_BACK )
     {
+#if (configCHERI_INT_MEMCPY == 2)
+        ( void ) local_memcpy( ( void * ) pxQueue->pcWriteTo, pvItemToQueue, ( size_t ) pxQueue->uxItemSize ); /*lint !e961 !e418 !e9087 MISRA exception as the casts are only redundant for some ports, plus previous logic ensures a null pointer can only be passed to memcpy() if the copy size is 0.  Cast to void required by function signature and safe as no alignment requirement and copy length specified in bytes. */
+
+#else
         ( void ) memcpy( ( void * ) pxQueue->pcWriteTo, pvItemToQueue, ( size_t ) pxQueue->uxItemSize ); /*lint !e961 !e418 !e9087 MISRA exception as the casts are only redundant for some ports, plus previous logic ensures a null pointer can only be passed to memcpy() if the copy size is 0.  Cast to void required by function signature and safe as no alignment requirement and copy length specified in bytes. */
+#endif
         pxQueue->pcWriteTo += pxQueue->uxItemSize;                                                       /*lint !e9016 Pointer arithmetic on char types ok, especially in this use case where it is the clearest way of conveying intent. */
 
         if( pxQueue->pcWriteTo >= pxQueue->u.xQueue.pcTail )                                             /*lint !e946 MISRA exception justified as comparison of pointers is the cleanest solution. */
@@ -2167,7 +2253,11 @@ static BaseType_t prvCopyDataToQueue( Queue_t * const pxQueue,
     }
     else
     {
+#if (configCHERI_INT_MEMCPY == 2)
+        ( void ) local_memcpy( ( void * ) pxQueue->u.xQueue.pcReadFrom, pvItemToQueue, ( size_t ) pxQueue->uxItemSize ); /*lint !e961 !e9087 !e418 MISRA exception as the casts are only redundant for some ports.  Cast to void required by function signature and safe as no alignment requirement and copy length specified in bytes.  Assert checks null pointer only used when length is 0. */
+#else
         ( void ) memcpy( ( void * ) pxQueue->u.xQueue.pcReadFrom, pvItemToQueue, ( size_t ) pxQueue->uxItemSize ); /*lint !e961 !e9087 !e418 MISRA exception as the casts are only redundant for some ports.  Cast to void required by function signature and safe as no alignment requirement and copy length specified in bytes.  Assert checks null pointer only used when length is 0. */
+#endif
         pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
 
         if( pxQueue->u.xQueue.pcReadFrom < pxQueue->pcHead ) /*lint !e946 MISRA exception justified as comparison of pointers is the cleanest solution. */
@@ -2222,7 +2312,11 @@ static void prvCopyDataFromQueue( Queue_t * const pxQueue,
             mtCOVERAGE_TEST_MARKER();
         }
 
+#if (configCHERI_INT_MEMCPY == 2)
+        ( void ) local_memcpy( ( void * ) pvBuffer, ( void * ) pxQueue->u.xQueue.pcReadFrom, ( size_t ) pxQueue->uxItemSize ); /*lint !e961 !e418 !e9087 MISRA exception as the casts are only redundant for some ports.  Also previous logic ensures a null pointer can only be passed to memcpy() when the count is 0.  Cast to void required by function signature and safe as no alignment requirement and copy length specified in bytes. */
+#else
         ( void ) memcpy( ( void * ) pvBuffer, ( void * ) pxQueue->u.xQueue.pcReadFrom, ( size_t ) pxQueue->uxItemSize ); /*lint !e961 !e418 !e9087 MISRA exception as the casts are only redundant for some ports.  Also previous logic ensures a null pointer can only be passed to memcpy() when the count is 0.  Cast to void required by function signature and safe as no alignment requirement and copy length specified in bytes. */
+#endif
     }
 }
 /*-----------------------------------------------------------*/

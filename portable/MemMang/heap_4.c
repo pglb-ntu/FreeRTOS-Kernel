@@ -34,6 +34,10 @@
  */
 #include <stdlib.h>
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#include <cheric.h>
+#endif
+
 /* Defining MPU_WRAPPERS_INCLUDED_FROM_API_FILE prevents task.h from redefining
  * all the API functions to use the MPU wrappers.  That should only be done when
  * task.h is included from an application file. */
@@ -61,7 +65,7 @@
 * heap - probably so it can be placed in a special segment or address. */
     extern uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
 #else
-    PRIVILEGED_DATA static uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
+    PRIVILEGED_HEAP static uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
 #endif /* configAPPLICATION_ALLOCATED_HEAP */
 
 /* Define the linked list structure.  This is used to link free blocks in order
@@ -116,6 +120,10 @@ void * pvPortMalloc( size_t xWantedSize )
 {
     BlockLink_t * pxBlock, * pxPreviousBlock, * pxNewBlockLink;
     void * pvReturn = NULL;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+    size_t xCallerWantedSize = xWantedSize;
+#endif
 
     vTaskSuspendAll();
     {
@@ -268,6 +276,9 @@ void * pvPortMalloc( size_t xWantedSize )
     #endif /* if ( configUSE_MALLOC_FAILED_HOOK == 1 ) */
 
     configASSERT( ( ( ( size_t ) pvReturn ) & ( size_t ) portBYTE_ALIGNMENT_MASK ) == 0 );
+#ifdef __CHERI_PURE_CAPABILITY__
+    pvReturn = cheri_csetbounds(pvReturn, xCallerWantedSize);
+#endif
     return pvReturn;
 }
 /*-----------------------------------------------------------*/
@@ -281,6 +292,14 @@ void vPortFree( void * pv )
     {
         /* The memory being freed will have an BlockLink_t structure immediately
          * before it. */
+#ifdef __CHERI_PURE_CAPABILITY__
+        /* For purecap, the bounds are set in malloc, so we cannot just take the
+        capability and subtract base. We have to rederive. */
+        puc = ucHeap;
+        size_t pvAddr = cheri_getaddress(pv);
+        size_t pucBase = cheri_getbase(puc);
+        puc = cheri_setoffset(puc, pvAddr - pucBase);
+#endif
         puc -= xHeapStructSize;
 
         /* This casting is to keep the compiler from issuing warnings. */
@@ -356,7 +375,7 @@ static void prvHeapInit( void ) /* PRIVILEGED_FUNCTION */
         xTotalHeapSize -= uxAddress - ( size_t ) ucHeap;
     }
 
-    pucAlignedHeap = ( uint8_t * ) uxAddress;
+    pucAlignedHeap = ( uint8_t * ) ucHeap + ( uxAddress - ( size_t ) ucHeap );
 
     /* xStart is used to hold a pointer to the first item in the list of free
      * blocks.  The void cast is used to prevent compiler warnings. */
@@ -368,7 +387,7 @@ static void prvHeapInit( void ) /* PRIVILEGED_FUNCTION */
     uxAddress = ( ( size_t ) pucAlignedHeap ) + xTotalHeapSize;
     uxAddress -= xHeapStructSize;
     uxAddress &= ~( ( size_t ) portBYTE_ALIGNMENT_MASK );
-    pxEnd = ( void * ) uxAddress;
+    pxEnd = ( void * )( ( uint8_t * ) ucHeap + ( uxAddress - ( size_t ) ucHeap ) );
     pxEnd->xBlockSize = 0;
     pxEnd->pxNextFreeBlock = NULL;
 

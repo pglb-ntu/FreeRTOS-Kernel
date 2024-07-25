@@ -28,6 +28,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#include <cheric.h>
+#endif
+
 /* Defining MPU_WRAPPERS_INCLUDED_FROM_API_FILE prevents task.h from redefining
  * all the API functions to use the MPU wrappers.  That should only be done when
  * task.h is included from an application file. */
@@ -38,6 +42,10 @@
 #include "task.h"
 #include "timers.h"
 #include "stack_macros.h"
+
+#if ( configCHERI_COMPARTMENTALIZATION == 1 )
+    #include <rtl/rtl-freertos-compartments.h>
+#endif
 
 /* Lint e9021, e961 and e750 are suppressed as a MISRA exception justified
  * because the MPU ports require MPU_WRAPPERS_INCLUDED_FROM_API_FILE to be defined
@@ -253,6 +261,10 @@
 typedef struct tskTaskControlBlock       /* The old naming convention is used to prevent breaking kernel aware debuggers. */
 {
     volatile StackType_t * pxTopOfStack; /*< Points to the location of the last item placed on the tasks stack.  THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT. */
+
+    #if ( configCHERI_COMPARTMENTALIZATION == 1 || configMPU_COMPARTMENTALIZATION == 1 )
+        xCOMPARTMENT_CONTEXT* xCompartmentContext;
+    #endif
 
     #if ( portUSING_MPU_WRAPPERS == 1 )
         xMPU_SETTINGS xMPUSettings; /*< The MPU settings are defined as part of the port layer.  THIS MUST BE THE SECOND MEMBER OF THE TCB STRUCT. */
@@ -584,6 +596,10 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB ) PRIVILEGED_FUNCTION;
         configASSERT( puxStackBuffer != NULL );
         configASSERT( pxTaskBuffer != NULL );
 
+        #if ( portUSING_MPU_WRAPPERS == 1 )
+            uxPriority |= portPRIVILEGE_BIT; /* Run the task in privileged mode by default */
+        #endif
+
         #if ( configASSERT_DEFINED == 1 )
             {
                 /* Sanity check that the size of the structure used to declare a
@@ -733,6 +749,10 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB ) PRIVILEGED_FUNCTION;
         TCB_t * pxNewTCB;
         BaseType_t xReturn;
 
+        #if ( portUSING_MPU_WRAPPERS == 1 )
+            uxPriority |= portPRIVILEGE_BIT; /* Run the task in privileged mode by default */
+        #endif
+
         /* If the stack grows down then allocate the stack then the TCB so the stack
          * does not grow into the TCB.  Likewise if the stack grows up then allocate
          * the TCB then the stack. */
@@ -833,13 +853,25 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
         if( ( uxPriority & portPRIVILEGE_BIT ) != 0U )
         {
             xRunPrivileged = pdTRUE;
+            pxNewTCB->xMPUSettings.xIsPrivileged = pdTRUE;
         }
         else
         {
             xRunPrivileged = pdFALSE;
+            pxNewTCB->xMPUSettings.xIsPrivileged = pdFALSE;
         }
         uxPriority &= ~portPRIVILEGE_BIT;
     #endif /* portUSING_MPU_WRAPPERS == 1 */
+
+    #if ( configCHERI_COMPARTMENTALIZATION == 1 || configMPU_COMPARTMENTALIZATION == 1 )
+        /* Allocate compartment context stack */
+        pxNewTCB->xCompartmentContext = pvPortMalloc( configCOMPARTMENTS_NUM * sizeof( xCOMPARTMENT_CONTEXT ) );
+
+        /* Tasks start with the kernel's compartment ID until a new
+         * function within a new compartment is called/entered.
+         */
+        pxNewTCB->xCompartmentContext->xCompID = configCOMPARTMENTS_NUM - 1;
+    #endif /* configCHERI_COMPARTMENTALIZATION == 1 */
 
     /* Avoid dependency on memset() if it is not required. */
     #if ( tskSET_NEW_STACKS_TO_KNOWN_VALUE == 1 )
@@ -856,7 +888,11 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
     #if ( portSTACK_GROWTH < 0 )
         {
             pxTopOfStack = &( pxNewTCB->pxStack[ ulStackDepth - ( uint32_t ) 1 ] );
+#ifdef __CHERI_PURE_CAPABILITY__
+            pxTopOfStack = (StackType_t*)cheri_clear_low_ptr_bits(pxTopOfStack, portBYTE_ALIGNMENT_MASK);
+#else
             pxTopOfStack = ( StackType_t * ) ( ( ( portPOINTER_SIZE_TYPE ) pxTopOfStack ) & ( ~( ( portPOINTER_SIZE_TYPE ) portBYTE_ALIGNMENT_MASK ) ) ); /*lint !e923 !e9033 !e9078 MISRA exception.  Avoiding casts between pointers and integers is not practical.  Size differences accounted for using portPOINTER_SIZE_TYPE type.  Checked by assert(). */
+#endif
 
             /* Check the alignment of the calculated top of stack is correct. */
             configASSERT( ( ( ( portPOINTER_SIZE_TYPE ) pxTopOfStack & ( portPOINTER_SIZE_TYPE ) portBYTE_ALIGNMENT_MASK ) == 0UL ) );
@@ -1057,6 +1093,19 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
         /* Pass the handle out in an anonymous way.  The handle can be used to
          * change the created task's priority, delete the created task, etc.*/
         *pxCreatedTask = ( TaskHandle_t ) pxNewTCB;
+
+        #if ( configCHERI_COMPARTMENTALIZATION == 1 )
+            /* Check if we are creating a task from a compartment, in which case it owns it */
+            BaseType_t xcompID = configCOMPARTMENTS_NUM - 1;
+
+            if ( pxCurrentTCB != NULL )
+                xcompID = pxCurrentTCB->xCompartmentContext->xCompID;
+
+            if ( xcompID != configCOMPARTMENTS_NUM - 1 ) {
+                FreeRTOSResource_t xResource = {.handle = pxNewTCB, .type = FREERTOS_TASK};
+                rtl_cherifreertos_compartment_add_resource(xcompID, xResource);
+            }
+        #endif
     }
     else
     {
@@ -1223,6 +1272,20 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB )
                 prvResetNextTaskUnblockTime();
             }
         }
+
+        #if ( configCHERI_COMPARTMENTALIZATION == 1 )
+            /* Check if we are deleting a task from a compartment, in which case it owns it */
+            BaseType_t xcompID = configCOMPARTMENTS_NUM - 1;
+
+            if ( pxCurrentTCB != NULL )
+                xcompID = pxCurrentTCB->xCompartmentContext->xCompID;
+
+            if ( xcompID != configCOMPARTMENTS_NUM - 1 ) {
+                FreeRTOSResource_t xResource = {.handle = pxTCB, .type = FREERTOS_TASK};
+                rtl_cherifreertos_compartment_remove_resource(xcompID, xResource);
+            }
+        #endif
+
         taskEXIT_CRITICAL();
 
         /* Force a reschedule if it is the currently running task that has just
@@ -5393,3 +5456,11 @@ static void prvAddCurrentTaskToDelayedList( TickType_t xTicksToWait,
     #endif
 
 #endif /* if ( configINCLUDE_FREERTOS_TASK_C_ADDITIONS_H == 1 ) */
+
+#if ( configCHERI_COMPARTMENTALIZATION == 1 )
+    xCOMPARTMENT_RET xTaskRunCompartment( BaseType_t ( * pxFunction ) ( void ), void *pxData, xCOMPARTMENT_ARGS *pxArgs, BaseType_t xCompID )
+    {
+        // TODO: We might want to allocate the stack here then free/zero it on return
+        return xPortCompartmentEnter( pxFunction, pxData, pxArgs, xCompID );
+    }
+#endif
