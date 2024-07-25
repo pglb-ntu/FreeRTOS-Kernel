@@ -765,7 +765,10 @@ xPortCompartmentEnterTrampoline:
 	# Load captable
 	load_x ct2, (1 * portWORD_SIZE) (ct2)
 	load_x ct2, 0(ct2)
-
+	bne ct2, zero, NotScealedJump
+        li a0, -2
+        cret
+        NotScealedJump:
 	/* Enter a critical section setting the new compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
 	cllc ct4, compartment_return
