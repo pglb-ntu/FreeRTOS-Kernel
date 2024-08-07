@@ -752,11 +752,6 @@ setup_regs:
 	.option pop
         /* adding 1 to counter*/
 
-	cllc ct3, .Lcounter
-	clc ct2, 0(ct3)
-        cld x1, 0(ct2)
-        addi x1, x1, 1
-        //csw x1, 0(ct3)
         
        /*setting up registers*/
 	cllc ct2, .Lfunc
@@ -774,7 +769,14 @@ xPortCompartmentEnterTrampoline:
 	# Assume ct2 is the start address of the metadata, and t0 has the dest compid
 	# Load func
 	load_x ct1, 0(ct2)
+        # adding 1 to counter
+	load_x ct3, (3 * portWORD_SIZE) (ct2)
+	load_x ct3, 0(ct3)
+        //cld x1, 0(ct3)
+        // addi x1, x1, 1
+        // csw x1, 0(ct3)
 	# Load captable
+
 	load_x ct2, (1 * portWORD_SIZE) (ct2)
 	load_x ct2, 0(ct2)
 
