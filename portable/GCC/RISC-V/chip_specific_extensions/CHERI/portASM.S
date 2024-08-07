@@ -743,12 +743,19 @@ xPortCompartmentTrampSetup:
 .Lfunc:      .zero portWORD_SIZE
 .Lcaptable:  .zero portWORD_SIZE
 .Ltramp:     .zero portWORD_SIZE
+.Lcounter:   .zero portWORD_SIZE
+
 setup_regs:
 	.option push
 	.option norvc
 	addi t0, x0, configCOMPARTMENTS_NUM - 1
 	.option pop
+        /* adding 1 to counter*/
+
+        
+       /*setting up registers*/
 	cllc ct2, .Lfunc
+
 0:	auipcc ct1, %pcrel_hi(.Ltramp)
 	load_x ct1, %pcrel_lo(0b)(ct1)
 	cjr       ct1
@@ -762,13 +769,23 @@ xPortCompartmentEnterTrampoline:
 	# Assume ct2 is the start address of the metadata, and t0 has the dest compid
 	# Load func
 	load_x ct1, 0(ct2)
+        # adding 1 to counter
+	load_x ct3, (3 * portWORD_SIZE) (ct2)
+	load_x ct3, 0(ct3)
+        //cld x1, 0(ct3)
+        // addi x1, x1, 1
+        // csw x1, 0(ct3)
 	# Load captable
+
 	load_x ct2, (1 * portWORD_SIZE) (ct2)
 	load_x ct2, 0(ct2)
-	bne ct2, zero, NotScealedJump
+
+	/*checking if compartment cgp is valid, if not returning error code*/
+	bne t2, zero, NotKilledJump
         li a0, -2
         cret
-        NotScealedJump:
+        NotKilledJump:
+        
 	/* Enter a critical section setting the new compartment context */
 	csrrc t3, mstatus, 8 // Disable interrupts
 	cllc ct4, compartment_return
