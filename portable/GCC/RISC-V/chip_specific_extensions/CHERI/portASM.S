@@ -771,10 +771,9 @@ xPortCompartmentEnterTrampoline:
 	load_x ct1, 0(ct2)
         # adding 1 to counter
 	load_x ct3, (3 * portWORD_SIZE) (ct2)
-	load_x ct3, 0(ct3)
-        //cld x1, 0(ct3)
-        // addi x1, x1, 1
-        // csw x1, 0(ct3)
+        cld t5, 0(ct3)
+        addi t5, t5, 1
+        csw t5, 0(ct3)
 	# Load captable
 
 	load_x ct2, (1 * portWORD_SIZE) (ct2)
